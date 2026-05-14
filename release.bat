@@ -3,7 +3,7 @@ setlocal EnableExtensions
 
 if "%~1"=="" (
   echo Usage: %~nx0 VERSION
-  echo Example: %~nx0 0.1.1
+  echo Example: %~nx0 0.1.4
   exit /b 1
 )
 
@@ -37,7 +37,7 @@ echo Updating src\Jesnote.csproj to %VERSION%...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop';" ^
   "$version=$env:VERSION;" ^
-  "if ($version -notmatch '^\d+\.\d+\.\d+([.-][A-Za-z0-9.-]+)?$') { throw 'Version must look like 0.1.1' }" ^
+  "if ($version -notmatch '^\d+\.\d+\.\d+([.-][A-Za-z0-9.-]+)?$') { throw 'Version must look like 0.1.4' }" ^
   "$path='src\Jesnote.csproj';" ^
   "$content=[IO.File]::ReadAllText($path,[Text.Encoding]::UTF8);" ^
   "if ($content -notmatch '<Version>[^<]+</Version>') { throw 'Could not find <Version> in src\Jesnote.csproj' }" ^

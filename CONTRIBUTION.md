@@ -34,7 +34,7 @@ The csproj enables `ServerGarbageCollection`, `ConcurrentGarbageCollection`, `Ti
 Use `release.bat` from the repository root to prepare a local release commit and tag:
 
 ```powershell
-.\release.bat 0.1.1
+.\release.bat 0.1.4
 ```
 
 The script updates `<Version>` in `src\Jesnote.csproj`, builds the Release configuration, commits the current working-tree changes, and creates tag locally. It does not push anything automatically.
@@ -42,7 +42,7 @@ The script updates `<Version>` in `src\Jesnote.csproj`, builds the Release confi
 Review `git status` before running it because the script commits all current changes. When the local release looks correct, push the branch and tag manually:
 
 ```powershell
-git push origin main v0.1.1
+git push origin main v0.1.4
 ```
 
 GitHub Actions will build and publish Windows x64 and Apple Silicon macOS release assets after the tag is pushed. The workflow publishes framework-dependent packages (`--self-contained false`), so end users need the .NET 8 Runtime installed.
