@@ -37,15 +37,17 @@ Use `release.bat` from the repository root to prepare a local release commit and
 .\release.bat 0.1.1
 ```
 
-The script updates `<Version>` in `src\Jesnote.csproj`, builds the Release configuration, commits the current working-tree changes, and creates tag `v0.1.2` locally. It does not push anything automatically.
+The script updates `<Version>` in `src\Jesnote.csproj`, builds the Release configuration, commits the current working-tree changes, and creates tag locally. It does not push anything automatically.
 
 Review `git status` before running it because the script commits all current changes. When the local release looks correct, push the branch and tag manually:
 
 ```powershell
-git push origin main v0.1.2
+git push origin main v0.1.1
 ```
 
-GitHub Actions will build and publish Windows x64 and Apple Silicon macOS release assets after the tag is pushed.
+GitHub Actions will build and publish Windows x64 and Apple Silicon macOS release assets after the tag is pushed. The workflow publishes framework-dependent packages (`--self-contained false`), so end users need the .NET 8 Runtime installed.
+
+Do not delete a published GitHub release just to republish the same tag. GitHub immutable releases can permanently block reusing a deleted tag name. Prefer a new patch version if the published release has already become immutable.
 
 ## Project layout
 
@@ -157,11 +159,43 @@ Search uses [Wildcard.Compile](src/Scripts/Core/Wildcard.cs) (depth-first, ignor
 
 Extract walks a subtree via `Utf8JsonWriter` straight into a `MemoryStream`. No intermediate boxed objects. Only Array and Object can be extracted.
 
+## Avalonia UI
+
+Jesnote uses Avalonia's classic desktop lifetime (`StartWithClassicDesktopLifetime`) and builds the UI in C# rather than XAML. The application root is [App.cs](src/App.cs), the main top-level window is [MainWindow.cs](src/MainWindow.cs), and the custom tree control is [VirtualJsonTree.cs](src/VirtualJsonTree.cs).
+
+Keep UI code in Avalonia terms:
+
+- Use `MenuItem.HotKey = new KeyGesture(...)` for menu shortcuts instead of manual `KeyDown` dispatch when the command already belongs to a menu item.
+- Use Avalonia storage APIs (`StorageProvider.OpenFilePickerAsync`, `SaveFilePickerAsync`) rather than WinForms or platform-specific dialogs.
+- Use `ShowDialog(owner)` for modal child windows. If the child is created in code, set the title/icon/theme before showing it and refresh any open dialog content when the user changes language or theme from inside that dialog.
+- Keep compact toolbar controls icon-like. Use text labels only where they carry domain meaning; for repeated navigation controls, prefer symbolic content plus localized `ToolTip` text.
+- Do not introduce WinForms/WPF concepts such as `DockStyle`, `ShortcutKeys`, or per-node tree controls into new Avalonia code.
+
+Avalonia layout can resize aggressively. Avoid depending on default button width for icon buttons; give fixed-format controls explicit `Width`, `MinWidth`, or layout constraints so localized text cannot stretch unrelated toolbar actions.
+
 ## Theming
 
 Avalonia handles light/dark styling through `RequestedThemeVariant` and the Fluent theme. The custom tree chooses its palette from the current Avalonia theme variant.
 
+On Windows, the title bar is drawn by DWM, outside Avalonia's normal render tree. [WindowChrome.cs](src/Scripts/WindowChrome.cs) applies `DwmSetWindowAttribute` after a native window handle exists. Keep this helper simple: set the desired dark/light state when the window opens and call it explicitly after a user theme change. Avoid focus/activation-based chrome updates; they can cause flicker.
+
 If you add a new custom-rendered control, verify it reacts correctly to light and dark variants.
+
+## Localization
+
+UI strings live in `.resx` files under [src/Resources](src/Resources). `Strings.resx` is the neutral English resource, and culture-specific files such as `Strings.zh-CN.resx`, `Strings.fr.resx`, and `Strings.ja.resx` must keep the same key set unless there is an intentional fallback.
+
+Language names in the settings dropdown are not localized through `.resx`. [Localization.LanguageName](src/Scripts/Localization.cs) returns each language's native display name, such as `English`, `简体中文`, and `日本語`, so every locale sees the same stable names. Do not add `Language.*` keys to resource files.
+
+When adding a locale:
+
+1. Add the enum value to `LanguagePreference`.
+2. Map it in `ResolveCulture` and `ResolveAutoCulture`.
+3. Add it to the language preference list in `MainWindow`.
+4. Add a full `Strings.<culture>.resx` file with the same UI keys as `Strings.resx`, excluding `Language.*`.
+5. Verify key parity across resources and build.
+
+Changing language while a dialog is open should update that dialog too. For settings-style dialogs, keep references to the visible label controls and repopulate localized choice lists after `Localization.Apply(...)`.
 
 ## Settings
 
@@ -285,7 +319,7 @@ Jesnote stores all primitive values in a single `long[] Values` slot whose inter
 
 `MemoryMappedFile` for the in-memory path: the OS page cache is already free under the second-pass read of a `byte[]` whose contents came from the same file. mmap saves the ~1 GiB managed heap allocation during build but introduces unsafe spans. The trade is not worth it at current scale; revisit if profiling shows the managed `byte[]` as the bottleneck.
 
-Parsing on multiple threads: `Utf8JsonReader` is inherently sequential because tokens depend on the surrounding context. You can split a JSONL file at line boundaries and parse lines in parallel, but the synchronization to insert into shared parallel arrays would dominate the savings unless the per-line work were substantial (it is not — each line is small).
+Parsing on multiple threads: `Utf8JsonReader` is inherently sequential because tokens depend on the surrounding context. You can split a JSONL file at line boundaries and parse lines in parallel, but the synchronization to insert into shared parallel arrays would dominate the savings unless the per-line work were substantial (it is not - each line is small).
 
 `Span<int>` instead of `List<int>` for frame children: `List<int>` is needed for the doubling growth pattern. Using `int[]` directly forces pre-sizing or manual `Array.Resize`. We tried it; the build code became unreadable for no measurable gain. The pool replacement on capacity > 1024 is the meaningful fix.
 

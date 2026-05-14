@@ -10,16 +10,16 @@ namespace Jesnote.Core;
 /// <summary>
 /// A loaded JSON document held as a compact, virtualization-friendly tree.
 /// Memory layout (parallel arrays, indexed by node id 0..Count-1):
-///   Types[i]       byte (1)  — <see cref="JsonNodeType"/>
-///   Keys[i]        ref  (8)  — key string (or "[i]" for array elements; null for root). Object keys are interned during parse.
-///   Values[i]      long (8)  — discriminated value slot, meaning depends on Types[i]
-///   Parents[i]     int  (4)  — parent id, -1 for root
-///   FirstChild[i]  int  (4)  — id of first child or -1
-///   NextSibling[i] int  (4)  — id of next sibling or -1
+///   Types[i]       byte (1)  - <see cref="JsonNodeType"/>
+///   Keys[i]        ref  (8)  - key string (or "[i]" for array elements; null for root). Object keys are interned during parse.
+///   Values[i]      long (8)  - discriminated value slot, meaning depends on Types[i]
+///   Parents[i]     int  (4)  - parent id, -1 for root
+///   FirstChild[i]  int  (4)  - id of first child or -1
+///   NextSibling[i] int  (4)  - id of next sibling or -1
 /// Total: 29 bytes/node + StringPool (sized to actual string-value count only).
 /// String values still live in a managed pool, but the pool is sized only
 /// to the number of String nodes (not Count). Object key strings are interned,
-/// which collapses many duplicate property names to a single instance —
+/// which collapses many duplicate property names to a single instance -
 /// typical JSON has < 200 distinct keys regardless of document size.
 ///
 /// Object children are stored alphabetically by key.
@@ -50,7 +50,7 @@ public sealed class JsonTreeDocument
 
     // Files up to this many bytes are fully loaded into RAM before parsing.
     // Avoids reading the file from disk twice. Above this, we fall back to a
-    // streaming chunked parse — the OS page cache keeps the second pass cheap
+    // streaming chunked parse - the OS page cache keeps the second pass cheap
     // for files smaller than physical RAM.
     const long InMemoryLoadLimit = 1L << 30; // 1 GiB
 
@@ -75,7 +75,7 @@ public sealed class JsonTreeDocument
 
     public int Count { get; private set; }
 
-    // Cache of "[0]".."[N-1]" — array-heavy docs (telemetry, logs) otherwise
+    // Cache of "[0]".."[N-1]" - array-heavy docs (telemetry, logs) otherwise
     // allocate one short string per element. 100M × 8 byte ref = unavoidable in
     // Keys[], but the heap-side strings dedupe for small array indices.
     static readonly string[] s_smallIndexKeys = BuildSmallIndexKeys(SmallIndexKeyCacheSize);
@@ -118,7 +118,7 @@ public sealed class JsonTreeDocument
 
     public bool GetBool(int id) => Values[id] != 0;
 
-    /// <summary>Boxed value access — kept for compatibility. Hot paths should use the typed getters above.</summary>
+    /// <summary>Boxed value access - kept for compatibility. Hot paths should use the typed getters above.</summary>
     public object? ValueOf(int id) =>
         (JsonNodeType)Types[id] switch
         {
@@ -361,7 +361,7 @@ public sealed class JsonTreeDocument
     }
 
     // -------------------------------------------------------------------------
-    // JSONL (JSON Lines) — one JSON document per line.
+    // JSONL (JSON Lines) - one JSON document per line.
     // -------------------------------------------------------------------------
     // .NET 8's Utf8JsonReader cannot read multiple top-level values from a single span
     // (the AllowMultipleValues option only exists in .NET 9+), so spliting on '\n'and parse each non-empty line independently.
@@ -479,7 +479,7 @@ public sealed class JsonTreeDocument
         return s.Slice(start, end - start);
     }
 
-    // Streaming JSONL — read the file once per pass, split on '\n' at chunk
+    // Streaming JSONL - read the file once per pass, split on '\n' at chunk
     // boundaries, parse each complete line as one JSON value. Lines bigger than
     // the current buffer trigger doubling (bounded by MaxStreamChunkBuffer).
     // Same chunk/grow pattern as CountFromStreamAsync, but token-state-free
@@ -1362,7 +1362,7 @@ public sealed class JsonTreeDocument
             case SearchType.Number:
                 if ((JsonNodeType)Types[id] == JsonNodeType.Number)
                 {
-                    // Must use the SAME formatter as DisplayValue / RawValue —
+                    // Must use the SAME formatter as DisplayValue / RawValue -
                     // otherwise a user typing the number they see ("1.5") would
                     // miss because search formatted it differently ("1.5000000000000000").
                     string s = FormatNumber(BitConverter.Int64BitsToDouble(Values[id]));
@@ -1407,10 +1407,8 @@ public sealed class JsonTreeDocument
     }
 
     // -------------------------------------------------------------------------
-    // Extract — rebuild a subtree as JSON bytes
+    // Extract - rebuild a subtree as JSON bytes
     // -------------------------------------------------------------------------
-
-
     public byte[] Extract(int id)
     {
         if (id < 0 || id >= Count)

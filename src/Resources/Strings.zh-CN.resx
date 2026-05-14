@@ -108,15 +108,6 @@
   <data name="JsonNodeType.Undefined" xml:space="preserve">
     <value>未定义</value>
   </data>
-  <data name="Language.Auto" xml:space="preserve">
-    <value>跟随系统</value>
-  </data>
-  <data name="Language.ChineseSimplified" xml:space="preserve">
-    <value>简体中文</value>
-  </data>
-  <data name="Language.English" xml:space="preserve">
-    <value>英语</value>
-  </data>
   <data name="Loading.ClipboardLabel" xml:space="preserve">
     <value>剪贴板</value>
   </data>

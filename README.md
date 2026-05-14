@@ -19,7 +19,7 @@
 
 > Inspired by [Janice](https://github.com/ErikKalkoken/Janice).
 
-- Built with a custom virtualized tree view so large files can be browsed without creating a UI node for every JSON element.
+- Built with a virtualized tree view so large files are browsed without creating a UI node for every JSON element.
 
 ## Features
 
@@ -29,11 +29,11 @@
 - Export the selected JSON branch to a new file or copy it to the clipboard.
 - View very large JSON files, like >2GB documents with 100MB+ elements without heavy memory issues or UI freezes.
 - Switch between light and dark themes.
-- Switch between different localizations (English, Simplified Chinese).
+- Locale support: English, Chinese, French, Japanese, Korean, Portuguese, Russian, Spanish.
 
 ## Requirements
 
-- Windows 10 or Apple Silicon macOS with .NET Runtime 8 or newer.
+- Windows 10 or MacOS (Apple Silicon) with .NET Runtime 8 or newer.
 
 ## Performance
 
@@ -73,9 +73,7 @@ If you want to build or run from source, see [CONTRIBUTION.md](./CONTRIBUTION.md
 ## Plan
 
 - Improve UI
-- Improve macOS packaging
-- Add more localizations
-- Add more Json related tools
+- Add more Json editing tools
 
 ## Attributions
 

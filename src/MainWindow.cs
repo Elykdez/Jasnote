@@ -38,11 +38,16 @@ public sealed class MainWindow : Window, ILocalizable
         ColorThemePreference.Dark,
     ];
 
-    static readonly LanguagePreference[] s_languageOrder =
+    static readonly LanguagePreference[] s_languagePreferences =
     [
-        LanguagePreference.Auto,
         LanguagePreference.English,
         LanguagePreference.ChineseSimplified,
+        LanguagePreference.Spanish,
+        LanguagePreference.Portuguese,
+        LanguagePreference.French,
+        LanguagePreference.Russian,
+        LanguagePreference.Japanese,
+        LanguagePreference.Korean,
     ];
 
     #endregion
@@ -84,8 +89,8 @@ public sealed class MainWindow : Window, ILocalizable
         };
     readonly TextBox _searchText = new();
     readonly Button _searchButton = new() { MinWidth = 80 };
-    readonly Button _topButton = new() { MinWidth = 54 };
-    readonly Button _bottomButton = new() { MinWidth = 66 };
+    readonly Button _topButton = new() { Width = 32, MinWidth = 32 };
+    readonly Button _bottomButton = new() { Width = 32, MinWidth = 32 };
     readonly Button _collapseButton = new() { MinWidth = 78 };
 
     readonly VirtualJsonTree _tree = new();
@@ -320,6 +325,8 @@ public sealed class MainWindow : Window, ILocalizable
 
     void BuildMenu()
     {
+        ApplyMenuHotKeys();
+
         _fileNew.Click += (s, e) => DoNew();
         _fileOpen.Click += async (s, e) => await DoOpenFileAsync();
         _fileOpenClipboard.Click += async (s, e) => await DoOpenFromClipboardAsync();
@@ -370,6 +377,17 @@ public sealed class MainWindow : Window, ILocalizable
         _menu.ItemsSource = new Control[] { _fileMenu, _viewMenu, _goMenu, _helpMenu };
     }
 
+    void ApplyMenuHotKeys()
+    {
+        _fileNew.HotKey = new KeyGesture(Key.N, KeyModifiers.Control);
+        _fileOpen.HotKey = new KeyGesture(Key.O, KeyModifiers.Control);
+        _fileReload.HotKey = new KeyGesture(Key.R, KeyModifiers.Alt);
+        _fileSettings.HotKey = new KeyGesture(Key.OemComma, KeyModifiers.Control);
+        _fileQuit.HotKey = new KeyGesture(Key.Q, KeyModifiers.Control);
+        _goTop.HotKey = new KeyGesture(Key.Home, KeyModifiers.Control);
+        _goBottom.HotKey = new KeyGesture(Key.End, KeyModifiers.Control);
+    }
+
     public void ApplyLocalization()
     {
         _fileMenu.Header = Localization.T("Menu.File");
@@ -396,8 +414,10 @@ public sealed class MainWindow : Window, ILocalizable
 
         _searchText.PlaceholderText = Localization.T("Search.Placeholder");
         _searchButton.Content = Localization.T("Search.Button");
-        _topButton.Content = "Top";
-        _bottomButton.Content = "Bottom";
+        _topButton.Content = "↑";
+        _bottomButton.Content = "↓";
+        ToolTip.SetTip(_topButton, Localization.T("Tooltip.ScrollTop"));
+        ToolTip.SetTip(_bottomButton, Localization.T("Tooltip.ScrollBottom"));
         _collapseButton.Content = Localization.T("Menu.View.CollapseAll");
         _cancelLoadButton.Content = Localization.T("Common.Cancel");
         if (_updateLink.IsVisible)
@@ -824,6 +844,19 @@ public sealed class MainWindow : Window, ILocalizable
     {
         var theme = new ComboBox { Width = 180 };
         var language = new ComboBox { Width = 180 };
+        var recentFilesLabel = SettingsLabel("Settings.RecentFiles");
+        var fileFilterLabel = SettingsLabel("Settings.FileFilter");
+        var updatesLabel = SettingsLabel("Settings.Updates");
+        var appearanceLabel = SettingsLabel("Settings.Appearance");
+        var languageLabel = SettingsLabel("Settings.Language");
+        var labels = new[]
+        {
+            recentFilesLabel,
+            fileFilterLabel,
+            updatesLabel,
+            appearanceLabel,
+            languageLabel,
+        };
         var recentCount = new NumericUpDown
         {
             Minimum = 3,
@@ -842,14 +875,8 @@ public sealed class MainWindow : Window, ILocalizable
             HorizontalAlignment = HorizontalAlignment.Right,
         };
 
-        theme.ItemsSource = s_themeOrder
-            .Select(p => new Choice<ColorThemePreference>(p, Localization.ThemeName(p)))
-            .ToArray();
-        theme.SelectedIndex = Array.IndexOf(s_themeOrder, _settings.ColorTheme);
-        language.ItemsSource = s_languageOrder
-            .Select(p => new Choice<LanguagePreference>(p, Localization.LanguageName(p)))
-            .ToArray();
-        language.SelectedIndex = Array.IndexOf(s_languageOrder, _settings.Language);
+        bool updatingDialogLocalization = false;
+        ApplySettingsChoices(theme, language);
 
         var dialog = new Window
         {
@@ -866,11 +893,11 @@ public sealed class MainWindow : Window, ILocalizable
                 Spacing = 10,
                 Children =
                 {
-                    SettingsRow(Localization.T("Settings.RecentFiles"), recentCount),
-                    SettingsRow(Localization.T("Settings.FileFilter"), extensionFilter),
-                    SettingsRow(Localization.T("Settings.Updates"), notifyUpdates),
-                    SettingsRow(Localization.T("Settings.Appearance"), theme),
-                    SettingsRow(Localization.T("Settings.Language"), language),
+                    SettingsRow(recentFilesLabel, recentCount),
+                    SettingsRow(fileFilterLabel, extensionFilter),
+                    SettingsRow(updatesLabel, notifyUpdates),
+                    SettingsRow(appearanceLabel, theme),
+                    SettingsRow(languageLabel, language),
                     close,
                 },
             },
@@ -884,6 +911,9 @@ public sealed class MainWindow : Window, ILocalizable
             _settings.NotifyUpdates = notifyUpdates.IsChecked == true;
         theme.SelectionChanged += (s, e) =>
         {
+            if (updatingDialogLocalization)
+                return;
+
             if (theme.SelectedItem is Choice<ColorThemePreference> choice)
             {
                 _settings.ColorTheme = choice.Value;
@@ -895,11 +925,15 @@ public sealed class MainWindow : Window, ILocalizable
         };
         language.SelectionChanged += (s, e) =>
         {
+            if (updatingDialogLocalization)
+                return;
+
             if (language.SelectedItem is Choice<LanguagePreference> choice)
             {
                 _settings.Language = choice.Value;
                 Localization.Apply(choice.Value);
                 ApplyLocalization();
+                ApplyDialogLocalization();
             }
         };
         close.Click += (s, e) => dialog.Close();
@@ -908,17 +942,71 @@ public sealed class MainWindow : Window, ILocalizable
         await dialog.ShowDialog(this);
         _settings.Save();
         RebuildRecentFilesMenu();
+
+        void ApplyDialogLocalization()
+        {
+            updatingDialogLocalization = true;
+            try
+            {
+                dialog.Title = Localization.T("Settings.Title");
+                close.Content = Localization.T("Common.Close");
+                foreach (var label in labels)
+                {
+                    if (label.Tag is string key)
+                        label.Text = Localization.T(key);
+                }
+                ApplySettingsChoices(theme, language);
+            }
+            finally
+            {
+                updatingDialogLocalization = false;
+            }
+        }
     }
 
-    static Grid SettingsRow(string label, Control control)
+    static TextBlock SettingsLabel(string key)
+    {
+        return new TextBlock
+        {
+            Tag = key,
+            Text = Localization.T(key),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+    }
+
+    static Grid SettingsRow(TextBlock label, Control control)
     {
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("160,*") };
-        row.Children.Add(
-            new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center }
-        );
+        row.Children.Add(label);
         Grid.SetColumn(control, 1);
         row.Children.Add(control);
         return row;
+    }
+
+    void ApplySettingsChoices(ComboBox theme, ComboBox language)
+    {
+        theme.ItemsSource = s_themeOrder
+            .Select(p => new Choice<ColorThemePreference>(p, Localization.ThemeName(p)))
+            .ToArray();
+        theme.SelectedIndex = Array.IndexOf(s_themeOrder, _settings.ColorTheme);
+
+        var languageOrder = CurrentLanguageOrder();
+        language.ItemsSource = languageOrder
+            .Select(p => new Choice<LanguagePreference>(p, Localization.LanguageName(p)))
+            .ToArray();
+        language.SelectedIndex = Array.IndexOf(languageOrder, _settings.Language);
+    }
+
+    static LanguagePreference[] CurrentLanguageOrder()
+    {
+        return
+        [
+            LanguagePreference.Auto,
+            .. s_languagePreferences.OrderBy(
+                Localization.LanguageName,
+                StringComparer.CurrentCulture
+            ),
+        ];
     }
 
     async Task ShowAboutAsync()

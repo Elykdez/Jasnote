@@ -12,6 +12,12 @@ public enum LanguagePreference
     Auto,
     English,
     ChineseSimplified,
+    French,
+    Japanese,
+    Korean,
+    Portuguese,
+    Russian,
+    Spanish,
 }
 
 public interface ILocalizable
@@ -45,7 +51,19 @@ public static class Localization
     public static string F(string key, params object?[] args) =>
         string.Format(CurrentCulture, T(key), args);
 
-    public static string LanguageName(LanguagePreference preference) => T("Language." + preference);
+    public static string LanguageName(LanguagePreference preference) =>
+        preference switch
+        {
+            LanguagePreference.English => "English",
+            LanguagePreference.ChineseSimplified => "简体中文",
+            LanguagePreference.French => "Français",
+            LanguagePreference.Japanese => "日本語",
+            LanguagePreference.Korean => "한국어",
+            LanguagePreference.Spanish => "Español",
+            LanguagePreference.Portuguese => "Português",
+            LanguagePreference.Russian => "Русский",
+            _ => "System default",
+        };
 
     public static string ThemeName(ColorThemePreference preference) => T("Theme." + preference);
 
@@ -58,14 +76,28 @@ public static class Localization
         {
             LanguagePreference.English => CultureInfo.GetCultureInfo("en-US"),
             LanguagePreference.ChineseSimplified => CultureInfo.GetCultureInfo("zh-CN"),
+            LanguagePreference.Spanish => CultureInfo.GetCultureInfo("es"),
+            LanguagePreference.Portuguese => CultureInfo.GetCultureInfo("pt"),
+            LanguagePreference.French => CultureInfo.GetCultureInfo("fr"),
+            LanguagePreference.Russian => CultureInfo.GetCultureInfo("ru"),
+            LanguagePreference.Japanese => CultureInfo.GetCultureInfo("ja"),
+            LanguagePreference.Korean => CultureInfo.GetCultureInfo("ko"),
             _ => ResolveAutoCulture(),
         };
 
     static CultureInfo ResolveAutoCulture()
     {
         var installed = CultureInfo.InstalledUICulture;
-        return installed.TwoLetterISOLanguageName.Equals("zh", StringComparison.OrdinalIgnoreCase)
-            ? CultureInfo.GetCultureInfo("zh-CN")
-            : CultureInfo.GetCultureInfo("en-US");
+        return installed.TwoLetterISOLanguageName.ToLowerInvariant() switch
+        {
+            "zh" => CultureInfo.GetCultureInfo("zh-CN"),
+            "es" => CultureInfo.GetCultureInfo("es"),
+            "pt" => CultureInfo.GetCultureInfo("pt"),
+            "fr" => CultureInfo.GetCultureInfo("fr"),
+            "ru" => CultureInfo.GetCultureInfo("ru"),
+            "ja" => CultureInfo.GetCultureInfo("ja"),
+            "ko" => CultureInfo.GetCultureInfo("ko"),
+            _ => CultureInfo.GetCultureInfo("en-US"),
+        };
     }
 }
