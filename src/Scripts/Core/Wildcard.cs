@@ -1,8 +1,11 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Jasnote.Core;
+namespace Jesnote.Core;
 
+/// <summary>
+/// Used for search patterns
+/// </summary>
 internal static class Wildcard
 {
     /// <summary>

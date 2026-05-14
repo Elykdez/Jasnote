@@ -3,7 +3,7 @@ setlocal
 
 pushd "%~dp0" >nul
 
-dotnet run --project ".\src\Jasnote.csproj" -- %*
+dotnet run --project ".\src\Jesnote.csproj" -- %*
 set "EXIT_CODE=%ERRORLEVEL%"
 
 popd >nul

@@ -1,4 +1,4 @@
-namespace Jasnote.Core;
+namespace Jesnote.Core;
 
 public enum JsonNodeType : byte
 {

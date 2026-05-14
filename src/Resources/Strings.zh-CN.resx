@@ -6,22 +6,14 @@
   <resheader name="version">
     <value>2.0</value>
   </resheader>
-  <resheader name="reader">
-    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0,
-      Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </resheader>
-  <resheader name="writer">
-    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0,
-      Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </resheader>
   <data name="About.Description" xml:space="preserve">
     <value>用于查看大型 JSON 文件的桌面应用。</value>
   </data>
   <data name="About.Title" xml:space="preserve">
-    <value>关于 Jasnote</value>
+    <value>关于 Jesnote</value>
   </data>
   <data name="About.Version" xml:space="preserve">
-    <value>版本：{0} (.NET WinForms 应用)</value>
+    <value>版本：{0} (.NET Avalonia 应用)</value>
   </data>
   <data name="Common.Cancel" xml:space="preserve">
     <value>取消</value>
@@ -128,6 +120,12 @@
   <data name="Loading.ClipboardLabel" xml:space="preserve">
     <value>剪贴板</value>
   </data>
+  <data name="Loading.Canceled" xml:space="preserve">
+    <value>加载已取消。</value>
+  </data>
+  <data name="Loading.Canceling" xml:space="preserve">
+    <value>正在取消加载...</value>
+  </data>
   <data name="Loading.Progress.File" xml:space="preserve">
     <value>{0} / {1}：正在从磁盘加载文件：{2}</value>
   </data>
@@ -144,64 +142,67 @@
     <value>正在加载</value>
   </data>
   <data name="Menu.File" xml:space="preserve">
-    <value>文件(&amp;F)</value>
+    <value>文件</value>
   </data>
   <data name="Menu.File.ExportClipboard" xml:space="preserve">
-    <value>导出选中内容到剪贴板(&amp;C)</value>
+    <value>导出选中内容到剪贴板</value>
   </data>
   <data name="Menu.File.ExportFile" xml:space="preserve">
-    <value>导出选中内容到文件(&amp;F)...</value>
+    <value>导出选中内容到文件...</value>
   </data>
   <data name="Menu.File.New" xml:space="preserve">
-    <value>新建(&amp;N)</value>
+    <value>新建</value>
   </data>
   <data name="Menu.File.Open" xml:space="preserve">
-    <value>打开文件(&amp;O)...</value>
+    <value>打开文件...</value>
   </data>
   <data name="Menu.File.OpenClipboard" xml:space="preserve">
-    <value>从剪贴板打开(&amp;B)</value>
+    <value>从剪贴板打开</value>
   </data>
   <data name="Menu.File.OpenRecent" xml:space="preserve">
-    <value>打开最近文件(&amp;R)</value>
+    <value>打开最近文件</value>
   </data>
   <data name="Menu.File.Quit" xml:space="preserve">
-    <value>退出(&amp;X)</value>
+    <value>退出</value>
   </data>
   <data name="Menu.File.Reload" xml:space="preserve">
-    <value>重新加载(&amp;L)</value>
+    <value>重新加载</value>
   </data>
   <data name="Menu.File.Settings" xml:space="preserve">
-    <value>设置(&amp;S)...</value>
+    <value>设置...</value>
   </data>
   <data name="Menu.Go" xml:space="preserve">
-    <value>跳转(&amp;G)</value>
+    <value>跳转</value>
   </data>
   <data name="Menu.Go.Bottom" xml:space="preserve">
-    <value>跳转到底部(&amp;B)</value>
+    <value>跳转到底部</value>
   </data>
   <data name="Menu.Go.Selection" xml:space="preserve">
-    <value>跳转到选中项(&amp;S)</value>
+    <value>跳转到选中项</value>
   </data>
   <data name="Menu.Go.Top" xml:space="preserve">
-    <value>跳转到顶部(&amp;T)</value>
+    <value>跳转到顶部</value>
   </data>
   <data name="Menu.Help" xml:space="preserve">
-    <value>帮助(&amp;H)</value>
+    <value>帮助</value>
   </data>
   <data name="Menu.Help.About" xml:space="preserve">
-    <value>关于(&amp;A)...</value>
+    <value>关于...</value>
+  </data>
+  <data name="Menu.Help.CheckUpdates" xml:space="preserve">
+    <value>检查更新...</value>
   </data>
   <data name="Menu.Help.ReportBug" xml:space="preserve">
-    <value>报告问题(&amp;R)</value>
+    <value>报告问题</value>
   </data>
   <data name="Menu.View" xml:space="preserve">
-    <value>视图(&amp;V)</value>
+    <value>视图</value>
   </data>
   <data name="Menu.View.CollapseAll" xml:space="preserve">
-    <value>全部折叠(&amp;C)</value>
+    <value>全部折叠</value>
   </data>
   <data name="Menu.View.ExpandAll" xml:space="preserve">
-    <value>全部展开(&amp;A)</value>
+    <value>全部展开</value>
   </data>
   <data name="Menu.View.ShowDetail" xml:space="preserve">
     <value>显示值详情</value>
@@ -263,8 +264,23 @@
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0} 个元素</value>
   </data>
+  <data name="Status.CheckingUpdates" xml:space="preserve">
+    <value>正在检查更新...</value>
+  </data>
+  <data name="Status.NoUpdates" xml:space="preserve">
+    <value>已经是最新版本。</value>
+  </data>
   <data name="Status.UpdateAvailable" xml:space="preserve">
     <value>有可用更新</value>
+  </data>
+  <data name="Status.UpdateAvailableVersion" xml:space="preserve">
+    <value>有可用更新：{0}</value>
+  </data>
+  <data name="Status.UpdateCheckFailed" xml:space="preserve">
+    <value>无法检查更新。</value>
+  </data>
+  <data name="Title.LoadedIn" xml:space="preserve">
+    <value>已加载，用时 {0}</value>
   </data>
   <data name="Theme.Auto" xml:space="preserve">
     <value>自动</value>
@@ -300,6 +316,6 @@
     <value>选择搜索范围</value>
   </data>
   <data name="Welcome.Text" xml:space="preserve">
-    <value>欢迎使用 Jasnote。&#xD;&#xA;&#xD;&#xA;通过文件菜单打开 JSON 或 JSONL 文件，将文件拖放到此窗口，&#xD;&#xA;或从剪贴板导入。</value>
+    <value>欢迎使用 Jesnote。&#xD;&#xA;&#xD;&#xA;通过文件菜单打开 JSON 或 JSONL 文件，将文件拖放到此窗口，&#xD;&#xA;或从剪贴板导入。</value>
   </data>
 </root>

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Jesnote</RootNamespace>
+    <AssemblyName>Jesnote</AssemblyName>
+    <RuntimeIdentifiers>win-x64;osx-arm64</RuntimeIdentifiers>
+    <ApplicationIcon>Resources\Icons\logo.ico</ApplicationIcon>
+
+    <Product>Jesnote</Product>
+    <AssemblyTitle>Jesnote</AssemblyTitle>
+    <Company>Elykdez</Company>
+    <Description>A desktop app for viewing large JSON files.</Description>
+    <Version>0.1.2</Version>
+    <Copyright>(c) 2026 Elykdez</Copyright>
+
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\AppInfo.json" LogicalName="Jesnote.AppInfo.json" />
+    <EmbeddedResource Include="Resources\Icons\logo.ico" LogicalName="Jesnote.Icons.LogoLight.ico" />
+    <EmbeddedResource Include="Resources\Icons\logo-dark.ico" LogicalName="Jesnote.Icons.Logo.ico" />
+  </ItemGroup>
+
+</Project>

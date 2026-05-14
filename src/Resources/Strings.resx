@@ -6,22 +6,14 @@
   <resheader name="version">
     <value>2.0</value>
   </resheader>
-  <resheader name="reader">
-    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0,
-      Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </resheader>
-  <resheader name="writer">
-    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0,
-      Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </resheader>
   <data name="About.Description" xml:space="preserve">
     <value>A desktop app for viewing large JSON files.</value>
   </data>
   <data name="About.Title" xml:space="preserve">
-    <value>About Jasnote</value>
+    <value>About Jesnote</value>
   </data>
   <data name="About.Version" xml:space="preserve">
-    <value>Version: {0}  (.NET WinForms app)</value>
+    <value>Version: {0}  (.NET Avalonia app)</value>
   </data>
   <data name="Common.Cancel" xml:space="preserve">
     <value>Cancel</value>
@@ -128,6 +120,12 @@
   <data name="Loading.ClipboardLabel" xml:space="preserve">
     <value>Clipboard</value>
   </data>
+  <data name="Loading.Canceled" xml:space="preserve">
+    <value>Loading canceled.</value>
+  </data>
+  <data name="Loading.Canceling" xml:space="preserve">
+    <value>Canceling load...</value>
+  </data>
   <data name="Loading.Progress.File" xml:space="preserve">
     <value>{0} / {1}: Loading file from disk: {2}</value>
   </data>
@@ -144,64 +142,67 @@
     <value>Loading</value>
   </data>
   <data name="Menu.File" xml:space="preserve">
-    <value>&amp;File</value>
+    <value>File</value>
   </data>
   <data name="Menu.File.ExportClipboard" xml:space="preserve">
-    <value>Export Selection To &amp;Clipboard</value>
+    <value>Export Selection To Clipboard</value>
   </data>
   <data name="Menu.File.ExportFile" xml:space="preserve">
-    <value>Export Selection To &amp;File...</value>
+    <value>Export Selection To File...</value>
   </data>
   <data name="Menu.File.New" xml:space="preserve">
-    <value>&amp;New</value>
+    <value>New</value>
   </data>
   <data name="Menu.File.Open" xml:space="preserve">
-    <value>&amp;Open File...</value>
+    <value>Open File...</value>
   </data>
   <data name="Menu.File.OpenClipboard" xml:space="preserve">
-    <value>Open From Clip&amp;board</value>
+    <value>Open From Clipboard</value>
   </data>
   <data name="Menu.File.OpenRecent" xml:space="preserve">
-    <value>Open &amp;Recent</value>
+    <value>Open Recent</value>
   </data>
   <data name="Menu.File.Quit" xml:space="preserve">
-    <value>E&amp;xit</value>
+    <value>Exit</value>
   </data>
   <data name="Menu.File.Reload" xml:space="preserve">
-    <value>Re&amp;load</value>
+    <value>Reload</value>
   </data>
   <data name="Menu.File.Settings" xml:space="preserve">
-    <value>&amp;Settings...</value>
+    <value>Settings...</value>
   </data>
   <data name="Menu.Go" xml:space="preserve">
-    <value>&amp;Go</value>
+    <value>Go</value>
   </data>
   <data name="Menu.Go.Bottom" xml:space="preserve">
-    <value>Go to &amp;bottom</value>
+    <value>Go to bottom</value>
   </data>
   <data name="Menu.Go.Selection" xml:space="preserve">
-    <value>Go to &amp;selection</value>
+    <value>Go to selection</value>
   </data>
   <data name="Menu.Go.Top" xml:space="preserve">
-    <value>Go to &amp;top</value>
+    <value>Go to top</value>
   </data>
   <data name="Menu.Help" xml:space="preserve">
-    <value>&amp;Help</value>
+    <value>Help</value>
   </data>
   <data name="Menu.Help.About" xml:space="preserve">
-    <value>&amp;About...</value>
+    <value>About...</value>
+  </data>
+  <data name="Menu.Help.CheckUpdates" xml:space="preserve">
+    <value>Check for updates...</value>
   </data>
   <data name="Menu.Help.ReportBug" xml:space="preserve">
-    <value>&amp;Report a bug</value>
+    <value>Report a bug</value>
   </data>
   <data name="Menu.View" xml:space="preserve">
-    <value>&amp;View</value>
+    <value>View</value>
   </data>
   <data name="Menu.View.CollapseAll" xml:space="preserve">
-    <value>&amp;Collapse All</value>
+    <value>Collapse All</value>
   </data>
   <data name="Menu.View.ExpandAll" xml:space="preserve">
-    <value>Expand &amp;All</value>
+    <value>Expand All</value>
   </data>
   <data name="Menu.View.ShowDetail" xml:space="preserve">
     <value>Show value detail</value>
@@ -263,8 +264,23 @@
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0} elements</value>
   </data>
+  <data name="Status.CheckingUpdates" xml:space="preserve">
+    <value>Checking for updates...</value>
+  </data>
+  <data name="Status.NoUpdates" xml:space="preserve">
+    <value>You are up to date.</value>
+  </data>
   <data name="Status.UpdateAvailable" xml:space="preserve">
     <value>Update available</value>
+  </data>
+  <data name="Status.UpdateAvailableVersion" xml:space="preserve">
+    <value>Update available: {0}</value>
+  </data>
+  <data name="Status.UpdateCheckFailed" xml:space="preserve">
+    <value>Could not check for updates.</value>
+  </data>
+  <data name="Title.LoadedIn" xml:space="preserve">
+    <value>loaded in {0}</value>
   </data>
   <data name="Theme.Auto" xml:space="preserve">
     <value>Automatic</value>
@@ -300,6 +316,6 @@
     <value>Select what to search</value>
   </data>
   <data name="Welcome.Text" xml:space="preserve">
-    <value>Welcome to Jasnote.&#xD;&#xA;&#xD;&#xA;Open a JSON or JSONL file through the File menu, drag &amp; drop one onto this window,&#xD;&#xA;or import from the clipboard.</value>
+    <value>Welcome to Jesnote.&#xD;&#xA;&#xD;&#xA;Open a JSON or JSONL file through the File menu, drag and drop one onto this window,&#xD;&#xA;or import from the clipboard.</value>
   </data>
 </root>

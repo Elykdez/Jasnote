@@ -1,16 +1,30 @@
-# Contributing to Jasnote
+# Contributing to Jesnote
 
-Jasnote is a Windows desktop JSON/JSONL viewer with one job: open files measured in gigabytes, with element counts in the tens of millions, and let the user navigate without OOM or UI freezes.
+Jesnote is a cross-platform Avalonia desktop JSON/JSONL viewer with one job: open files measured in gigabytes, with element counts in the tens of millions, and let the user navigate without OOM or UI freezes.
 Every architectural decision flows from that constraint. Before changing anything that touches parsing, the tree document, or rendering, read this file.
 
 ## Build and run
 
-Requires the .NET 8 SDK. From the repo root:
+Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or newer. From the repo root:
 
 ```powershell
 .\run.bat                  # build + run (no file)
 .\run.bat .\sample.json    # build + run with file argument
-dotnet build .\src\Jasnote.csproj -c Release
+dotnet run --project .\src\Jesnote.csproj -- .\sample.json
+dotnet restore .\src\Jesnote.csproj
+dotnet build .\src\Jesnote.csproj -c Release
+```
+
+The Release build output is written to:
+
+```text
+src\bin\Release\net8.0\
+```
+
+You can also build the solution file if your SDK supports `.slnx`:
+
+```powershell
+dotnet build .\Jesnote.slnx -c Release
 ```
 
 The csproj enables `ServerGarbageCollection`, `ConcurrentGarbageCollection`, `TieredCompilation`, and `TieredPGO`. Do not turn these off without measuring.
@@ -23,7 +37,7 @@ Use `release.bat` from the repository root to prepare a local release commit and
 .\release.bat 0.1.1
 ```
 
-The script updates `<Version>` in `src\Jasnote.csproj`, builds the Release configuration, commits the current working-tree changes, and creates tag `v0.1.2` locally. It does not push anything automatically.
+The script updates `<Version>` in `src\Jesnote.csproj`, builds the Release configuration, commits the current working-tree changes, and creates tag `v0.1.2` locally. It does not push anything automatically.
 
 Review `git status` before running it because the script commits all current changes. When the local release looks correct, push the branch and tag manually:
 
@@ -31,19 +45,19 @@ Review `git status` before running it because the script commits all current cha
 git push origin main v0.1.2
 ```
 
-GitHub Actions will build and publish the release asset after the tag is pushed.
+GitHub Actions will build and publish Windows x64 and Apple Silicon macOS release assets after the tag is pushed.
 
 ## Project layout
 
-Put code in [src/Scripts](Scripts) and assets in [src/Resources](Resources).
+Put portable parser/settings/localization code in [src/Scripts](src/Scripts), Avalonia UI code directly under [src](src), and assets in [src/Resources](src/Resources).
 
 ## Performance budget
 
 The README target: open documents above 2 GiB with 100M+ elements without heavy memory issues or UI freezes. Concretely:
 
-Per-element heap cost stays at or under ~30 bytes plus a per-string-value entry. No intermediate fully-materialized JSON tree (no `JsonDocument`, no `Dictionary<string, object>`, no boxed value tree) is built; parsing writes directly to the compact representation. No per-element WinForms `TreeNode` exists; the tree is virtualized. Files larger than 1 GiB never get loaded as a single managed `byte[]`; they use the streaming/chunked path.
+Per-element heap cost stays at or under ~30 bytes plus a per-string-value entry. No intermediate fully-materialized JSON tree (no `JsonDocument`, no `Dictionary<string, object>`, no boxed value tree) is built; parsing writes directly to the compact representation. No per-element UI tree node exists; the tree is custom-rendered and virtualized. Files larger than 1 GiB never get loaded as a single managed `byte[]`; they use the streaming/chunked path.
 
-A full boxed object graph is usually several times larger than the input file and becomes the dominant memory cost on huge documents. Jasnote skips that step entirely. If you find yourself adding code that materializes the whole input as managed objects before scanning, stop and reconsider.
+A full boxed object graph is usually several times larger than the input file and becomes the dominant memory cost on huge documents. Jesnote skips that step entirely. If you find yourself adding code that materializes the whole input as managed objects before scanning, stop and reconsider.
 
 ## Tree memory layout
 
@@ -69,7 +83,7 @@ The `long Values[]` slot is a discriminated union driven by `Types[i]`. Numbers 
 
 Array index keys (`[0]`, `[1]`, ...) are deduped via a static cache of 4096 entries so log-style documents do not allocate one short string per index.
 
-When you add a node type or change the value layout, verify the per-node bytes are still bounded and update the comment block at the top of [JsonTreeDocument.cs](src/Core/JsonTreeDocument.cs).
+When you add a node type or change the value layout, verify the per-node bytes are still bounded and update the comment block at the top of [JsonTreeDocument.cs](src/Scripts/Core/JsonTreeDocument.cs).
 
 ## Parse pipeline
 
@@ -95,11 +109,11 @@ JSON Lines (`.jsonl`, `.ndjson`) puts one complete JSON document per line. .NET 
 
 Each top-level value becomes a child of a synthetic Array root pre-seeded via `PushSyntheticJsonlRoot`. The synthetic root is hidden by the tree control, so the user sees the records as top-level siblings keyed `[0]`, `[1]`, ...
 
-Detection is by file extension only ([MainForm.IsJsonlPath](src/MainForm.cs)). The picker filter is `*.json;*.jsonl;*.ndjson`. Trailing CR (CRLF) is stripped. Leading and trailing ASCII whitespace is stripped. Empty lines are skipped. A malformed line throws `JsonException` with the byte offset; the existing error dialog in `MainForm` displays it.
+Detection is by file extension only ([MainWindow.IsJsonlPath](src/MainWindow.cs)). The picker filter is `*.json;*.jsonl;*.ndjson`. Trailing CR (CRLF) is stripped. Leading and trailing ASCII whitespace is stripped. Empty lines are skipped. A malformed line throws `JsonException` with the byte offset; the main window displays it in the status footer.
 
 ## UI virtualization
 
-[VirtualJsonTree](src/Controls/VirtualJsonTree.cs) is a custom owner-drawn `Control`, not `TreeView`. `TreeView` allocates a `TreeNode` per node, which is fatal at millions of elements.
+[VirtualJsonTree](src/VirtualJsonTree.cs) is a custom-rendered Avalonia `Control`, not `TreeView` or `ListBox`. Per-node UI controls are fatal at millions of elements.
 
 State:
 
@@ -109,53 +123,53 @@ State:
 
 Opening or closing a branch splices descendants in or out of `_visible` and `_depths`. That is O(visible delta), not a full re-walk of the document. A 100M-element doc with everything collapsed has a `_visible` of size 1.
 
-Paint draws only `ClientSize.Height / rowHeight` rows. GDI+ brushes and pens are cached in dictionaries keyed by `Color.ToArgb()`; allocating a `SolidBrush` per row per paint churns hundreds of GDI handles per second.
+Rendering draws only `Bounds.Height / rowHeight` rows. Avoid per-row control creation and keep per-render allocation low.
 
 `Expand All` is disabled for documents with more than 1000 elements. There is no realistic way to display every node, and `List.InsertRange` on a 100M-entry list would be catastrophic.
 
-Per-row string display is capped at 200 characters. `g.DrawString` degrades badly past ~10 KB inputs. The `DetailPanel` caps at 64 KiB for the same reason but keeps the full payload in `RawText` for clipboard copy.
+Per-row string display is capped at 200 characters. The detail pane caps display at 64 KiB for responsiveness; extraction and clipboard export still use the full stored value/subtree.
 
 ## Progress reporting
 
-`JsonTreeDocument` reports progress via `IProgress<ProgressInfo>`. The shim in [LoadingDialog](src/Forms/LoadingDialog.cs) marshals via `BeginInvoke` to the UI thread.
+`JsonTreeDocument` reports progress via `IProgress<ProgressInfo>`. The Avalonia window creates the progress object on the UI thread and displays load status in the footer.
 
 Two gotchas bit us; do not regress them.
 
-Throttling: a 100M-element parse fires ~10 000 progress reports during the build pass. Without throttling, every one `BeginInvoke`s the UI thread; the message pump cannot keep up and the dialog stops repainting and stops responding to Cancel. The shim throttles step-3 in-progress reports to ~30 fps. Step transitions and the final `Progress >= 1.0` are always dispatched.
+Throttling still matters: a 100M-element parse can fire ~10 000 progress reports during the build pass. If a modal loading UI returns, do not dispatch every report directly to the UI thread. Step transitions and the final `Progress >= 1.0` should always be displayed.
 
 Bucket-diff vs modulo: the regular JSON path checks `Count % ProgressTick == 0` after every token, where `Count` increments by exactly 1, so every multiple is always seen. The JSONL path checks after every line, where `Count` jumps by however many tokens that line contained. If lines have a uniform shape (an object with 16 fields gives 17 tokens), `Count` never lands on a multiple of `ProgressTick` and the modulo check never fires; no progress, no cancellation, frozen dialog until the final `Progress=1.0`. Use the bucket-diff helper `ReportJsonlProgress`, which compares `Count - _lastProgressCount >= ProgressTick`. If you add a new parse path that updates `Count` in batches, use bucket-diff, not modulo.
 
 ## Frame pool
 
-The build pass uses a per-parent `Frame { Children: List<int> }` to collect child ids before linking and (for objects) alphabetical sorting. Frames are pooled and reused via `RentFrame` / `ReturnFrame` in [JsonTreeDocument.cs](src/Core/JsonTreeDocument.cs).
+The build pass uses a per-parent `Frame { Children: List<int> }` to collect child ids before linking and (for objects) alphabetical sorting. Frames are pooled and reused via `RentFrame` / `ReturnFrame` in [JsonTreeDocument.cs](src/Scripts/Core/JsonTreeDocument.cs).
 
 `ReturnFrame` previously called `f.Children.Clear()`, which keeps the backing `int[]` capacity. After parsing a single wide array of N children, the frame's `Children` was sized to N; on the next parse, that capacity stayed pooled. For documents with a 50M-child array, that meant hundreds of MB retained across loads. The current code replaces `Children` with a fresh small `List<int>(4)` when capacity exceeds 1024. If you change the frame pool, do not regress this.
 
 ## Cancellation
 
-Cancellation propagates from the modal `LoadingDialog`'s `CancellationTokenSource`. Inside parse loops, check `ct.ThrowIfCancellationRequested()` at least every few thousand tokens or every chunk read. Do not put it inside the progress-fires gate; that is the bug we hit when modulo-progress never fired and cancellation rode along on it.
+Inside parse loops, check `ct.ThrowIfCancellationRequested()` at least every few thousand tokens or every chunk read. Do not put it inside the progress-fires gate; that is the bug we hit when modulo-progress never fired and cancellation rode along on it.
 
-If parse throws `OperationCanceledException`, the dialog closes and `_doc` is left in a possibly partial state, but `_tree.Document` is never assigned (that only happens in `OnDocumentLoaded` after success). The next load calls `AllocateArrays`, which overwrites everything cleanly.
+If parse throws `OperationCanceledException`, `_doc` may be left in a partial state, but `_tree.Document` should not be assigned until load success. The next load calls `AllocateArrays`, which overwrites everything cleanly.
 
 ## Search and extract
 
-Search uses [Wildcard.Compile](src/Core/Wildcard.cs) (depth-first, ignores the start node, returns the next match). Search runs on a `Task.Run` so the UI stays responsive; the search loop checks `ct.ThrowIfCancellationRequested` between nodes.
+Search uses [Wildcard.Compile](src/Scripts/Core/Wildcard.cs) (depth-first, ignores the start node, returns the next match). Search runs on a `Task.Run` so the UI stays responsive; the search loop checks `ct.ThrowIfCancellationRequested` between nodes.
 
 Extract walks a subtree via `Utf8JsonWriter` straight into a `MemoryStream`. No intermediate boxed objects. Only Array and Object can be extracted.
 
 ## Theming
 
-WinForms has no native dark theme. [Theme.Apply](src/Theme.cs) walks the control tree at form-show time and swaps colors. Auto mode reads `AppsUseLightTheme` from `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`.
+Avalonia handles light/dark styling through `RequestedThemeVariant` and the Fluent theme. The custom tree chooses its palette from the current Avalonia theme variant.
 
-If you add a new control type, verify it picks up dark colors. Some WinForms controls (notably native scrollbars and menu drop shadows) ignore explicit color settings on .NET 8.
+If you add a new custom-rendered control, verify it reacts correctly to light and dark variants.
 
 ## Settings
 
-[AppSettings](src/AppSettings.cs) is JSON-serialized to `%AppData%\Jasnote\settings.json`. Load and save failures are swallowed; they are best-effort. To add a field, add the property with a sensible default; `PropertyNamingPolicy = CamelCase` is already set; update [SettingsDialog](src/Forms/SettingsDialog.cs) if it should be user-facing.
+[AppSettings](src/Scripts/AppSettings.cs) is JSON-serialized to the current platform's application-data folder under `Jesnote/settings.json`. Load and save failures are swallowed; they are best-effort. To add a field, add the property with a sensible default; `PropertyNamingPolicy = CamelCase` is already set; update the settings dialog in [MainWindow.cs](src/MainWindow.cs) if it should be user-facing.
 
 ## Things deliberately not done
 
-Linux/macOS support: WinForms is Windows-only; cross-platform requires a different UI toolkit. A PR is welcome but it is effectively a fork.
+Linux packaging: the app now uses Avalonia and the project is portable, but CI currently publishes Windows x64 and Apple Silicon macOS packages only.
 
 Memory-mapped file I/O: [PLAN.md](PLAN.md) mentions it; the current code uses `ReadAllBytesAsync` for files <=1 GiB and chunked streaming above. The OS page cache makes the second pass effectively free for files that fit in RAM. mmap would only save 1 GiB of managed-heap pressure during the build pass and requires unsafe spans. Reconsider if profiling shows it is the bottleneck.
 
@@ -163,25 +177,25 @@ Find-all-matches UI: the current search workflow returns one match at a time and
 
 Streaming JSON (not JSONL) tokens larger than 1 GiB: a single token bigger than `MaxStreamChunkBuffer` errors out cleanly. Files where this happens are pathological.
 
-Per-row text width caching during paint: `g.MeasureString` runs once per visible row per paint, about 3000 calls/sec at 60 fps with 50 rows. It is the largest sub-second perf cost during scroll but has not yet caused user-visible jank.
+Per-row text width caching during render: text measurement runs for visible rows on each render. Keep it out of parser paths and revisit only if profiling shows scroll jank.
 
 ## Adding a feature
 
 Match the existing style: Allman braces, file-scoped namespaces, ASCII-only in source files, no emojis or em dashes.
 
-Read the surrounding code carefully. The hot paths in `JsonTreeDocument` and `VirtualJsonTree` have deliberate constraints (no per-node boxing, no per-paint allocation). Adding a `List<Foo>` in the parser path is almost always wrong; ask whether the data really needs to live anywhere other than the existing parallel arrays.
+Read the surrounding code carefully. The hot paths in `JsonTreeDocument` and `VirtualJsonTree` have deliberate constraints (no per-node boxing, no per-render allocation). Adding a `List<Foo>` in the parser path is almost always wrong; ask whether the data really needs to live anywhere other than the existing parallel arrays.
 
 Verify the build passes:
 
 ```powershell
-dotnet build .\src\Jasnote.csproj -c Release
+dotnet build .\src\Jesnote.csproj -c Release
 ```
 
 Smoke-test against [sample.json](sample.json) and at least one large file (1 GiB or more) before claiming a change is done. Memory and timing regressions on big inputs do not show up on small inputs.
 
 When changing parse code, watch for: allocations inside the token loop (anything you allocate runs O(N) where N can be 100M); memory not freed at parse end (`BuildContext` and any pooled state should reset cleanly); progress reports in batched-`Count` paths must use bucket-diff; cancellation must check at least every chunk or every few thousand tokens; the compact-array sizing must include any synthetic nodes (such as the JSONL root).
 
-When changing UI code, watch for: per-paint allocations (brushes, pens, strings — cache them); `_visible.IndexOf(id)` is O(visible) and acceptable only when `_visible` is small (do not call it inside paint); operations on `JsonTreeDocument` from a background thread (the parallel arrays are not synchronized; reading them from paint while the build is mutating them will produce garbage, currently masked by `Enabled = false` on the main form during load).
+When changing UI code, watch for: per-render allocations (brushes, pens, strings - cache them); `_visible.IndexOf(id)` is O(visible) and acceptable only for navigation events (do not call it inside render); operations on `JsonTreeDocument` from a background thread (the parallel arrays are not synchronized; reading them from render while the build is mutating them will produce garbage, currently avoided by assigning the document only after load success).
 
 ## Performance: memory-saving techniques
 
@@ -189,7 +203,7 @@ This is the long-form rationale for the architectural decisions above. If you ch
 
 ### Boxed-tree pipeline to avoid
 
-A common loader shape uses three observable steps and is easy to reason about, but it is too memory-heavy for Jasnote's target:
+A common loader shape uses three observable steps and is easy to reason about, but it is too memory-heavy for Jesnote's target:
 
 Step 1, load: a decoder reads the full file and produces a recursive boxed object graph: dictionaries for objects, lists for arrays, boxed numbers and booleans, strings, and null markers.
 
@@ -213,15 +227,15 @@ Parent-to-children map: hash-table overhead plus a child-list header per parent.
 
 So a compact indexed form can be reasonable at steady state, but the transient boxed-tree cost during load is still too high.
 
-### How Jasnote adapts each step
+### How Jesnote adapts each step
 
-Step 1 (avoid building a boxed tree). Jasnote runs `Utf8JsonReader` directly over the bytes. There is no intermediate tree at all. `Utf8JsonReader` is a `ref struct` that yields tokens without allocating per token. The only allocations during the count pass are short-lived: the reader state, a 256 KiB chunk buffer for the streaming path, and nothing else. This is the largest memory win in the parser.
+Step 1 (avoid building a boxed tree). Jesnote runs `Utf8JsonReader` directly over the bytes. There is no intermediate tree at all. `Utf8JsonReader` is a `ref struct` that yields tokens without allocating per token. The only allocations during the count pass are short-lived: the reader state, a 256 KiB chunk buffer for the streaming path, and nothing else. This is the largest memory win in the parser.
 
-Step 2 (count without a separate tree walk). Jasnote folds this into the first pass: `CountTokens` and `CountFromStreamAsync` accumulate `TotalCount` and `StringCount` while they read tokens. Same number of token reads, no separate tree to walk.
+Step 2 (count without a separate tree walk). Jesnote folds this into the first pass: `CountTokens` and `CountFromStreamAsync` accumulate `TotalCount` and `StringCount` while they read tokens. Same number of token reads, no separate tree to walk.
 
-Step 3 (emit compact nodes). Jasnote's `BuildFromSpan` and `BuildFromStreamAsync` run a second token pass and emit nodes into pre-sized arrays. The `BuildContext` uses a `Stack<Frame>` to track open object/array frames; on `EndObject` the frame's collected children are sorted alphabetically by key via `span.Sort(new KeyComparer(Keys))` (struct comparer, no closure allocation) and then linked via `FirstChild` and `NextSibling`.
+Step 3 (emit compact nodes). Jesnote's `BuildFromSpan` and `BuildFromStreamAsync` run a second token pass and emit nodes into pre-sized arrays. The `BuildContext` uses a `Stack<Frame>` to track open object/array frames; on `EndObject` the frame's collected children are sorted alphabetically by key via `span.Sort(new KeyComparer(Keys))` (struct comparer, no closure allocation) and then linked via `FirstChild` and `NextSibling`.
 
-Per-element steady-state in Jasnote:
+Per-element steady-state in Jesnote:
 
 `byte[] Types`: 1 byte.
 `string?[] Keys`: 8 bytes for the reference; key strings themselves are interned per parse.
@@ -235,7 +249,7 @@ Total: 29 bytes per node plus a string-pool entry only for string-typed nodes. C
 
 A full-tree loader does not stream. The full file must fit in RAM after expansion into managed objects, so failure mode is usually OOM.
 
-Jasnote draws a line at 1 GiB (`InMemoryLoadLimit` in [JsonTreeDocument.cs](src/Core/JsonTreeDocument.cs)). At or below 1 GiB the file is `ReadAllBytesAsync`'d into a managed `byte[]` and parsed twice from that span; the OS page cache makes the second pass effectively free. Above 1 GiB the streaming path opens the file twice (`FileOptions.Asynchronous | FileOptions.SequentialScan`, 1 MiB buffer), reads in chunks, and feeds `Utf8JsonReader` with `isFinalBlock: false` plus persisted `JsonReaderState` across chunks. The buffer doubles up to 1 GiB if a single token (a huge string literal) does not fit; beyond that, the parser throws `InvalidDataException` instead of OOM.
+Jesnote draws a line at 1 GiB (`InMemoryLoadLimit` in [JsonTreeDocument.cs](src/Scripts/Core/JsonTreeDocument.cs)). At or below 1 GiB the file is `ReadAllBytesAsync`'d into a managed `byte[]` and parsed twice from that span; the OS page cache makes the second pass effectively free. Above 1 GiB the streaming path opens the file twice (`FileOptions.Asynchronous | FileOptions.SequentialScan`, 1 MiB buffer), reads in chunks, and feeds `Utf8JsonReader` with `isFinalBlock: false` plus persisted `JsonReaderState` across chunks. The buffer doubles up to 1 GiB if a single token (a huge string literal) does not fit; beyond that, the parser throws `InvalidDataException` instead of OOM.
 
 For JSONL the streaming path is simpler: each line is a complete JSON value, so we split on `\n` at chunk boundaries and parse each completed line in isolation with `Utf8JsonReader(line, isFinalBlock: true, default)`. No reader state crosses lines, so a malformed line errors only on that line.
 
@@ -243,15 +257,15 @@ For JSONL the streaming path is simpler: each line is a complete JSON value, so 
 
 Object keys still need stable alphabetical display order. A boxed-tree loader can sort key strings collected from each object after the object has been decoded.
 
-Jasnote does the same but defers the sort to `EndObject` and sorts the collected child id list, comparing via a struct `KeyComparer` that reads `Keys[i]` for each id. `CollectionsMarshal.AsSpan(list).Sort(comparer)` avoids the lambda closure allocation that `List.Sort(Comparison)` would incur. For a 100M-element document with many objects, this saves on the order of N small allocations.
+Jesnote does the same but defers the sort to `EndObject` and sorts the collected child id list, comparing via a struct `KeyComparer` that reads `Keys[i]` for each id. `CollectionsMarshal.AsSpan(list).Sort(comparer)` avoids the lambda closure allocation that `List.Sort(Comparison)` would incur. For a 100M-element document with many objects, this saves on the order of N small allocations.
 
 ### Progress and cancellation cadence
 
-Progress and cancellation use a fixed 10 000-node cadence in the parser. The reports are delivered to the WinForms loading dialog through `IProgress<ProgressInfo>`.
+Progress and cancellation use a fixed 10 000-node cadence in the parser. The reports are delivered to the Avalonia UI through `IProgress<ProgressInfo>`.
 
-Jasnote uses the same 10 000 tick, but two implementation details matter:
+Jesnote uses the same 10 000 tick, but two implementation details matter:
 
-WinForms has no built-in marshaling for arbitrary publishers, so the `LoadingDialog.ProgressShim` does its own `BeginInvoke` for each report. Without throttling, 10 000 `BeginInvoke`s flood the message pump on the UI thread and the dialog stops repainting and stops responding to Cancel. The shim throttles step-3 in-progress reports to ~30 fps (final and step-transition reports are always dispatched).
+UI dispatch is not free. If a future loading dialog mirrors every parser progress report onto the UI thread, 10 000 reports can still flood rendering. Throttle step-3 in-progress reports and always show step transitions plus the final `Progress >= 1.0`.
 
 The cadence check itself must be a bucket-diff when `Count` updates in batches (as in the JSONL paths) rather than a modulo. See the Progress reporting section above for the full story; a uniform-line JSONL file with 17 tokens per line never lands `Count` on a multiple of 10 000 and the modulo never fires.
 
@@ -259,13 +273,13 @@ The cadence check itself must be a bucket-diff when `Count` updates in batches (
 
 A parent-to-children map with one child list per parent is expensive for a 100M-element document with mostly singleton parents, which is typical of array-heavy JSONL. The map overhead alone can be hundreds of MB.
 
-Jasnote stores children as a linked list (`FirstChild` + `NextSibling`). No per-parent map or slice header. The cost is that "get the Nth child" or "count children" walks the list, but neither operation is hot. The tree control accesses children in order via `FirstChild` then iteratively `NextSibling`, which is exactly what the linked-list layout optimizes for.
+Jesnote stores children as a linked list (`FirstChild` + `NextSibling`). No per-parent map or slice header. The cost is that "get the Nth child" or "count children" walks the list, but neither operation is hot. The tree control accesses children in order via `FirstChild` then iteratively `NextSibling`, which is exactly what the linked-list layout optimizes for.
 
 ### Primitives boxed vs discriminated
 
 A boxed-value design stores primitive values as object references. Every number and boolean pays object/interface overhead and adds GC tracking. With tens of millions of primitive values, this is a significant slice of heap.
 
-Jasnote stores all primitive values in a single `long[] Values` slot whose interpretation is driven by `Types[i]`. No boxing. The trade-off is that all numbers are stored as `double` (acceptable for a viewer) and that strings need an extra indirection through `StringPool`. The cost of the indirection is one extra cache miss on string display; the saving is roughly 16 bytes per non-string primitive.
+Jesnote stores all primitive values in a single `long[] Values` slot whose interpretation is driven by `Types[i]`. No boxing. The trade-off is that all numbers are stored as `double` (acceptable for a viewer) and that strings need an extra indirection through `StringPool`. The cost of the indirection is one extra cache miss on string display; the saving is roughly 16 bytes per non-string primitive.
 
 ### Things that look like wins but are not
 
@@ -279,11 +293,11 @@ Parsing on multiple threads: `Utf8JsonReader` is inherently sequential because t
 
 ## Lessons learned the hard way
 
-1. `JsonReaderOptions.AllowMultipleValues` is .NET 9, not .NET 8. The codebase targets `net8.0-windows`; if you need multi-value parsing, use line splitting.
+1. `JsonReaderOptions.AllowMultipleValues` is .NET 9, not .NET 8. The codebase targets `net8.0`; if you need multi-value parsing, use line splitting.
 2. `List.Clear()` keeps the backing capacity. Pooled lists that have grown large must be replaced, not cleared.
-3. `BeginInvoke` is not free. Tens of thousands of unthrottled `BeginInvoke`s freeze the UI thread.
+3. UI dispatch is not free. Tens of thousands of unthrottled progress updates can freeze the UI thread.
 4. `Count % N == 0` only fires when `Count` is a multiple. If `Count` jumps by varying amounts, use a bucket-diff.
-5. `Utf8JsonReader.GetString()` on a 100 MB string token works fine, but `g.DrawString` does not. Cap display, keep the raw value for copy.
+5. `Utf8JsonReader.GetString()` on a 100 MB string token works fine, but rendering that much text at once does not. Cap display, keep the raw value for copy/export.
 6. `byte[].Length` is capped at `int.MaxValue` (~2.1 GiB). On 64-bit .NET 8 this is the default array max even with `gcAllowVeryLargeObjects` (which is on by default). Files larger than 2 GiB cannot use the in-memory path.
 
 That is the critical surface. Anything not covered here, infer from the code. Anything contradicted by the code, the code is the source of truth and this file is stale: please update it.

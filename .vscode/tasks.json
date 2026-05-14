@@ -2,12 +2,12 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Jasnote: Build",
+      "label": "Jesnote: Build",
       "type": "shell",
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}\\Jasnote.slnx",
+        "${workspaceFolder}\\Jesnote.slnx",
         "-c",
         "Debug"
       ],
@@ -18,7 +18,7 @@
       "problemMatcher": "$msCompile"
     },
     {
-      "label": "Jasnote: Run",
+      "label": "Jesnote: Run",
       "type": "shell",
       "command": "${workspaceFolder}\\run.bat",
       "group": "test",
@@ -29,7 +29,7 @@
       }
     },
     {
-      "label": "Jasnote: Run sample.json",
+      "label": "Jesnote: Run sample.json",
       "type": "shell",
       "command": "${workspaceFolder}\\run.bat",
       "args": [

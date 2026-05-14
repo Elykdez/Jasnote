@@ -5,32 +5,24 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace Jasnote.Core;
+namespace Jesnote.Core;
 
 /// <summary>
 /// A loaded JSON document held as a compact, virtualization-friendly tree.
-///
 /// Memory layout (parallel arrays, indexed by node id 0..Count-1):
 ///   Types[i]       byte (1)  — <see cref="JsonNodeType"/>
 ///   Keys[i]        ref  (8)  — key string (or "[i]" for array elements; null for root). Object keys are interned during parse.
-///   Values[i]      long (8)  — discriminated value slot, meaning depends on Types[i]:
-///                                Number  → <see cref="BitConverter.DoubleToInt64Bits"/> of the double
-///                                String  → index into <see cref="StringPool"/>
-///                                Boolean → 0 or 1
-///                                Object/Array/Null → unused (0)
+///   Values[i]      long (8)  — discriminated value slot, meaning depends on Types[i]
 ///   Parents[i]     int  (4)  — parent id, -1 for root
 ///   FirstChild[i]  int  (4)  — id of first child or -1
 ///   NextSibling[i] int  (4)  — id of next sibling or -1
 /// Total: 29 bytes/node + StringPool (sized to actual string-value count only).
+/// String values still live in a managed pool, but the pool is sized only
+/// to the number of String nodes (not Count). Object key strings are interned,
+/// which collapses many duplicate property names to a single instance —
+/// typical JSON has < 200 distinct keys regardless of document size.
 ///
-/// vs. the old layout's 38 bytes/node with parallel <c>double[] / string[] / byte[]</c>
-/// (all of length N): a unified discriminated slot saves ~9 bytes/node, which is
-/// ~900 MB on a 100M-element document. String values still live in a managed pool,
-/// but the pool is sized only to the number of String nodes (not Count). Object key
-/// strings are interned, which collapses many duplicate property names to a single
-/// instance — typical JSON has < 200 distinct keys regardless of document size.
-///
-/// Object children are stored alphabetically by key (matching the Go original).
+/// Object children are stored alphabetically by key.
 /// Loading uses one of two strategies depending on size:
 ///   - In-memory fast path: file (or supplied buffer) is fully loaded into a byte[]
 ///     and parsed in two passes over the same span. No disk double-read.
@@ -104,13 +96,13 @@ public sealed class JsonTreeDocument
 
     public void Reset()
     {
-        Types = Array.Empty<byte>();
-        Keys = Array.Empty<string?>();
-        Values = Array.Empty<long>();
-        Parents = Array.Empty<int>();
-        FirstChild = Array.Empty<int>();
-        NextSibling = Array.Empty<int>();
-        StringPool = Array.Empty<string>();
+        Types = [];
+        Keys = [];
+        Values = [];
+        Parents = [];
+        FirstChild = [];
+        NextSibling = [];
+        StringPool = [];
         _stringPoolCount = 0;
         Count = 0;
         _framePool.Clear();
@@ -212,7 +204,7 @@ public sealed class JsonTreeDocument
 
         if (size <= InMemoryLoadLimit)
         {
-            byte[] data = await ReadAllBytesAsync(path, ct).ConfigureAwait(false);
+            byte[] data = await ReadAllBytesAsync(path, progress, ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             await Task.Run(() => LoadFromBytes(data, progress, ct, jsonl), ct)
                 .ConfigureAwait(false);
@@ -225,8 +217,8 @@ public sealed class JsonTreeDocument
         using (var s1 = OpenSequentialRead(path))
         {
             stats = jsonl
-                ? await CountJsonlFromStreamAsync(s1, ct).ConfigureAwait(false)
-                : await CountFromStreamAsync(s1, ct).ConfigureAwait(false);
+                ? await CountJsonlFromStreamAsync(s1, progress, ct).ConfigureAwait(false)
+                : await CountFromStreamAsync(s1, progress, ct).ConfigureAwait(false);
         }
         ct.ThrowIfCancellationRequested();
         progress?.Report(new ProgressInfo(3, 3, stats.TotalCount, 0));
@@ -255,7 +247,11 @@ public sealed class JsonTreeDocument
             options: FileOptions.Asynchronous | FileOptions.SequentialScan
         );
 
-    static async Task<byte[]> ReadAllBytesAsync(string path, CancellationToken ct)
+    static async Task<byte[]> ReadAllBytesAsync(
+        string path,
+        IProgress<ProgressInfo>? progress,
+        CancellationToken ct
+    )
     {
         using var fs = OpenSequentialRead(path);
         long len = fs.Length;
@@ -269,7 +265,9 @@ public sealed class JsonTreeDocument
             if (read == 0)
                 break;
             offset += read;
+            ReportByteProgress(progress, 1, offset, buf.Length);
         }
+        ReportByteProgress(progress, 1, buf.Length, buf.Length);
         return buf;
     }
 
@@ -282,7 +280,7 @@ public sealed class JsonTreeDocument
     {
         progress?.Report(new ProgressInfo(2, 3, 0, 0));
 
-        var stats = jsonl ? CountJsonl(data, ct) : CountTokens(data, ct);
+        var stats = jsonl ? CountJsonl(data, progress, ct) : CountTokens(data, progress, ct);
         ct.ThrowIfCancellationRequested();
 
         progress?.Report(new ProgressInfo(3, 3, stats.TotalCount, 0));
@@ -301,7 +299,11 @@ public sealed class JsonTreeDocument
         public int StringCount;
     }
 
-    static ParseStats CountTokens(ReadOnlySpan<byte> data, CancellationToken ct)
+    static ParseStats CountTokens(
+        ReadOnlySpan<byte> data,
+        IProgress<ProgressInfo>? progress,
+        CancellationToken ct
+    )
     {
         var state = new JsonReaderState(s_readerOptions);
         var reader = new Utf8JsonReader(data, isFinalBlock: true, state);
@@ -328,9 +330,11 @@ public sealed class JsonTreeDocument
             if (++sinceCheck >= 65536)
             {
                 ct.ThrowIfCancellationRequested();
+                ReportByteProgress(progress, 2, reader.BytesConsumed, data.Length);
                 sinceCheck = 0;
             }
         }
+        ReportByteProgress(progress, 2, data.Length, data.Length);
         return new ParseStats { TotalCount = count, StringCount = strings };
     }
 
@@ -359,14 +363,16 @@ public sealed class JsonTreeDocument
     // -------------------------------------------------------------------------
     // JSONL (JSON Lines) — one JSON document per line.
     // -------------------------------------------------------------------------
-    //
-    // .NET 8's Utf8JsonReader cannot read multiple top-level values from a
-    // single span (the AllowMultipleValues option only exists in .NET 9+),
-    // so we split on '\n' and parse each non-empty line independently. Each
-    // line's top-level value is attached to a synthetic Array root as [0],
-    // [1], … so the existing tree code renders it like a regular JSON array.
+    // .NET 8's Utf8JsonReader cannot read multiple top-level values from a single span
+    // (the AllowMultipleValues option only exists in .NET 9+), so spliting on '\n'and parse each non-empty line independently.
+    // Each line's top-level value is attached to a synthetic Array root as [0], [1]...
+    // so the existing tree code renders it like a regular JSON array.
 
-    static ParseStats CountJsonl(ReadOnlySpan<byte> data, CancellationToken ct)
+    static ParseStats CountJsonl(
+        ReadOnlySpan<byte> data,
+        IProgress<ProgressInfo>? progress,
+        CancellationToken ct
+    )
     {
         int count = 1; // synthetic Array root
         int strings = 0;
@@ -386,9 +392,11 @@ public sealed class JsonTreeDocument
             if (++sinceCheck >= 1024)
             {
                 ct.ThrowIfCancellationRequested();
+                ReportByteProgress(progress, 2, pos, data.Length);
                 sinceCheck = 0;
             }
         }
+        ReportByteProgress(progress, 2, data.Length, data.Length);
         return new ParseStats { TotalCount = count, StringCount = strings };
     }
 
@@ -430,7 +438,7 @@ public sealed class JsonTreeDocument
             int pos = 0;
             while (pos < data.Length)
             {
-                int rel = data.Slice(pos).IndexOf((byte)'\n');
+                int rel = data[pos..].IndexOf((byte)'\n');
                 int lineEnd = rel < 0 ? data.Length : pos + rel;
                 int adjEnd = lineEnd;
                 if (adjEnd > pos && data[adjEnd - 1] == (byte)'\r')
@@ -477,13 +485,18 @@ public sealed class JsonTreeDocument
     // Same chunk/grow pattern as CountFromStreamAsync, but token-state-free
     // because each line is parsed in isolation with isFinalBlock: true.
 
-    static async Task<ParseStats> CountJsonlFromStreamAsync(Stream stream, CancellationToken ct)
+    static async Task<ParseStats> CountJsonlFromStreamAsync(
+        Stream stream,
+        IProgress<ProgressInfo>? progress,
+        CancellationToken ct
+    )
     {
         byte[] buffer = ArrayPool<byte>.Shared.Rent(InitialBufferSize);
         int bytesInBuffer = 0;
         bool reachedEnd = false;
         int count = 1; // synthetic Array root
         int strings = 0;
+        long totalBytes = stream.CanSeek ? stream.Length : 0;
 
         try
         {
@@ -516,6 +529,8 @@ public sealed class JsonTreeDocument
                 if (consumed > 0 && consumed < bytesInBuffer)
                     Buffer.BlockCopy(buffer, consumed, buffer, 0, bytesInBuffer - consumed);
                 bytesInBuffer -= consumed;
+                if (totalBytes > 0)
+                    ReportByteProgress(progress, 2, stream.Position - bytesInBuffer, totalBytes);
 
                 if (consumed == 0 && !reachedEnd && bytesInBuffer == buffer.Length)
                 {
@@ -538,12 +553,12 @@ public sealed class JsonTreeDocument
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+        ReportByteProgress(progress, 2, totalBytes, totalBytes);
         return new ParseStats { TotalCount = count, StringCount = strings };
     }
 
-    // Returns the number of bytes consumed (up to and including the last
-    // newline processed). Remaining bytes are an incomplete trailing line
-    // that the caller shifts to the start of the buffer and tops up.
+    // Returns the number of bytes consumed (up to and including the last newline processed).
+    // Remaining bytes are an incomplete trailing line that the caller shifts to the start of the buffer and tops up.
     static int CountJsonlChunk(
         ReadOnlySpan<byte> data,
         bool isFinal,
@@ -707,14 +722,14 @@ public sealed class JsonTreeDocument
         progress?.Report(new ProgressInfo(3, 3, expectedSize, (double)doc.Count / expectedSize));
     }
 
-    // Create the synthetic Array root that holds top-level JSONL values as
-    // children. Must run before any HandleToken so the first top-level value
-    // attaches with key "[0]" via the normal array-index path.
+    // Create the synthetic Array root that holds top-level JSONL values as children.
+    // Must run before any HandleToken so the first top-level value attaches with key "[0]"
+    // via the normal array-index path.
     void PushSyntheticJsonlRoot(Stack<Frame> stack)
     {
         int rootId = AddArray(string.Empty);
-        // Parents[] is filled with -1 in AllocateArrays; explicit assignment
-        // here documents intent and survives any future change to that fill.
+        // Parents[] is filled with -1 in AllocateArrays; explicit assignment here
+        // documents intent and survives any future change to that fill.
         Parents[rootId] = -1;
         stack.Push(RentFrame(rootId, isObject: false));
     }
@@ -777,8 +792,8 @@ public sealed class JsonTreeDocument
                 var f = ctx.Stack.Pop();
                 if (f.Children.Count > 1)
                 {
-                    // Sort object children alphabetically. Struct comparer +
-                    // Span<int>.Sort<TComparer> avoids the closure allocation
+                    // Sort object children alphabetically.
+                    // Struct comparer + Span<int>.Sort<TComparer> avoids the closure allocation
                     // a List.Sort lambda would incur per parent.
                     var span = CollectionsMarshal.AsSpan(f.Children);
                     span.Sort(new KeyComparer(Keys));
@@ -874,7 +889,11 @@ public sealed class JsonTreeDocument
     // Streaming path (very large files only)
     // -------------------------------------------------------------------------
 
-    static async Task<ParseStats> CountFromStreamAsync(Stream stream, CancellationToken ct)
+    static async Task<ParseStats> CountFromStreamAsync(
+        Stream stream,
+        IProgress<ProgressInfo>? progress,
+        CancellationToken ct
+    )
     {
         byte[] buffer = ArrayPool<byte>.Shared.Rent(InitialBufferSize);
         int bytesInBuffer = 0;
@@ -882,6 +901,7 @@ public sealed class JsonTreeDocument
         var state = new JsonReaderState(s_readerOptions);
         int count = 0;
         int stringCount = 0;
+        long totalBytes = stream.CanSeek ? stream.Length : 0;
 
         try
         {
@@ -915,6 +935,8 @@ public sealed class JsonTreeDocument
                 if (consumed > 0 && consumed < bytesInBuffer)
                     Buffer.BlockCopy(buffer, consumed, buffer, 0, bytesInBuffer - consumed);
                 bytesInBuffer -= consumed;
+                if (totalBytes > 0)
+                    ReportByteProgress(progress, 2, stream.Position - bytesInBuffer, totalBytes);
 
                 if (consumed == 0 && !reachedEnd && bytesInBuffer == buffer.Length)
                 {
@@ -937,7 +959,22 @@ public sealed class JsonTreeDocument
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+        ReportByteProgress(progress, 2, totalBytes, totalBytes);
         return new ParseStats { TotalCount = count, StringCount = stringCount };
+    }
+
+    static void ReportByteProgress(
+        IProgress<ProgressInfo>? progress,
+        int step,
+        long processedBytes,
+        long totalBytes
+    )
+    {
+        if (progress == null || totalBytes <= 0)
+            return;
+
+        double ratio = Math.Clamp((double)processedBytes / totalBytes, 0, 1);
+        progress.Report(new ProgressInfo(step, 3, 0, ratio));
     }
 
     static int CountChunk(
@@ -1263,6 +1300,7 @@ public sealed class JsonTreeDocument
         if (startId < 0 || startId >= Count)
             startId = RootId;
 
+        pattern = NormalizeSearchPattern(pattern, type);
         var rx = Wildcard.Compile(pattern, RegexOptions.None);
         int id = startId;
 
@@ -1357,9 +1395,21 @@ public sealed class JsonTreeDocument
         return NotFound;
     }
 
+    static string NormalizeSearchPattern(string pattern, SearchType type)
+    {
+        if (type != SearchType.String)
+            return pattern;
+
+        // String search is expected to behave like a "contains" search for
+        // plain text input. Keep explicit wildcard patterns untouched so power
+        // users can still control the match shape.
+        return pattern.Contains('*') ? pattern : $"*{pattern}*";
+    }
+
     // -------------------------------------------------------------------------
     // Extract — rebuild a subtree as JSON bytes
     // -------------------------------------------------------------------------
+
 
     public byte[] Extract(int id)
     {
@@ -1443,15 +1493,13 @@ public sealed class JsonTreeDocument
         }
     }
 
-    // .NET 5+ default double.ToString(InvariantCulture) yields the shortest
-    // round-trippable representation — close to Go's strconv.FormatFloat(v, 'g', -1, 64).
+    // Default double.ToString(InvariantCulture) yields the shortest round-trippable representation
     // Used by both DisplayValue and Search so the user can search for the number they see.
     static string FormatNumber(double v) => v.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// Returns a display string for the value of the node (single line).
-    /// String values are <i>not</i> truncated here — callers that render in
-    /// finite space (tree rows, detail panel) are responsible for capping.
+    /// Returns a display string for the value of the node (single line). String values are NOT truncated here
+    /// callers that render in finite space (tree rows, detail panel) are responsible for capping.
     /// </summary>
     public string DisplayValue(int id)
     {

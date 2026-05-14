@@ -1,7 +1,7 @@
-# Jasnote
+# Jesnote
 
 <p align="center">
-  <a href="https://github.com/Elykdez/Jasnote"><img src="src\Resources\Icons\logo.png" alt="Jasnote" width="96" /></a>
+  <a href="https://github.com/Elykdez/Jesnote"><img src="src\Resources\Icons\logo.png" alt="Jesnote" width="96" /></a>
 </p>
 <p align="center">
   <p align="center"><strong>打开和查看超大型 JSON | JSONL 文档的桌面应用。</strong></p>
@@ -10,12 +10,11 @@
   <a href="./README.md">English</a> | 中文
 </p>
 <p align="center">
-  <a href="https://github.com/Elykdez/Jasnote/actions/workflows/ci-cd.yml"><img alt="CI/CD" src="https://github.com/Elykdez/Jasnote/actions/workflows/ci-cd.yml/badge.svg" /></a>
-  <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4" />
-  <img alt="WinForms" src="https://img.shields.io/badge/UI-WinForms-0078D4" />
+  <a href="https://github.com/Elykdez/Jesnote/actions/workflows/ci-cd.yml"><img alt="CI/CD" src="https://github.com/Elykdez/Jesnote/actions/workflows/ci-cd.yml/badge.svg" /></a>
+  <img alt="Avalonia" src="https://img.shields.io/badge/UI-Avalonia-0078D4" />
   <img alt="JSON" src="https://img.shields.io/badge/data-JSON-2F7D32" />
-  <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D6" />
-  <a href="https://github.com/Elykdez/Jasnote/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Elykdez/Jasnote?label=release" /></a>
+  <img alt="Windows and Apple Silicon macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20ARM64-0078D6" />
+  <a href="https://github.com/Elykdez/Jesnote/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Elykdez/Jesnote?label=release" /></a>
 </p>
 
 > 受到 [Janice](https://github.com/ErikKalkoken/Janice) 启发。
@@ -34,61 +33,47 @@
 
 ## 要求
 
-- Windows 10，且已安装 .NET Desktop Runtime 8 或更高版本。
-- 从源码构建时需要 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) 或更高版本。
+- Windows 10 或 Apple Silicon macOS，且已安装 .NET Runtime 8 或更高版本。
 
-## 运行 (Windows)
+## 性能
 
-从 [Releases 页面](https://github.com/Elykdez/jasnote/releases)下载最新打包版本，解压后运行解压目录中的 `run.bat`。
+[![Demo](demo.png)](./)
 
-从源码运行：
+- 完整加载并渲染一个包含 6600 万元素 12GB 大小的 JSONL 文件大约耗时 100 秒 (机械硬盘)。
+- 实际速度会因设备硬件而异，尤其是 CPU、内存容量、磁盘/SSD 速度和散热状态。
+- 以上数据仅为参考，不保证所有设备都能达到相同速度。
 
-```powershell
-.\run.bat
-```
+## 搜索模式
 
-也可以直接打开一个文件：
+先选择搜索类型，再输入搜索模式：
 
-```powershell
-.\run.bat .\sample.json
-```
+- **Key**：搜索 JSON 的属性名。
+- **String**：搜索 JSON 的字符串值。
+- **Number**：搜索数值。
+- **Keyword**：只搜索 `true`、`false` 或 `null`。
 
-等价的 `dotnet` 命令：
+模式规则：
 
-```powershell
-dotnet run --project .\src\Jasnote.csproj -- .\sample.json
-```
+- 在 **String** 搜索中，直接输入纯文本时会按“包含”处理。
+  - `user` 可以匹配 `user`、`username`、`current_user_id`。
+- `*` 是通配符。
+  - `user*` = 以 `user` 开头
+  - `*user` = 以 `user` 结尾
+  - `*user*` = 包含 `user`
+- 在 **Key**、**Number** 和 **Keyword** 搜索中，仍然使用原来的通配符匹配行为。
 
-## 构建
+搜索会从当前选中位置开始向后查找。如果在文档末尾之前没有找到结果，Jesnote 会询问是否要从顶部继续搜索。
 
-还原依赖：
+## 快速开始
 
-```powershell
-dotnet restore .\src\Jasnote.csproj
-```
+从 [Releases 页面](https://github.com/Elykdez/Jesnote/releases) 下载最新打包版本，解压后运行对应平台的可执行文件。
 
-构建 Release 二进制文件：
-
-```powershell
-dotnet build .\src\Jasnote.csproj -c Release
-```
-
-构建输出会写入：
-
-```text
-src\bin\Release\net8.0-windows\
-```
-
-如果你的 SDK 支持 `.slnx`，也可以构建解决方案文件：
-
-```powershell
-dotnet build .\Jasnote.slnx -c Release
-```
+如果你想从源码运行或自行构建，请查看 [CONTRIBUTION.md](./CONTRIBUTION.md)。
 
 ## 计划
 
 - 改进 UI
-- 添加 OSX 支持
+- 改进 macOS 打包
 - 添加更多本地化
 - 添加更多 JSON 相关工具
 

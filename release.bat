@@ -14,7 +14,7 @@ pushd "%~dp0" >nul
 
 git rev-parse --is-inside-work-tree >nul 2>nul
 if errorlevel 1 (
-  echo This script must be run from inside the Jasnote git repository.
+  echo This script must be run from inside the Jesnote git repository.
   popd >nul
   exit /b 1
 )
@@ -33,20 +33,20 @@ if not errorlevel 1 (
   exit /b 1
 )
 
-echo Updating src\Jasnote.csproj to %VERSION%...
+echo Updating src\Jesnote.csproj to %VERSION%...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop';" ^
   "$version=$env:VERSION;" ^
   "if ($version -notmatch '^\d+\.\d+\.\d+([.-][A-Za-z0-9.-]+)?$') { throw 'Version must look like 0.1.1' }" ^
-  "$path='src\Jasnote.csproj';" ^
+  "$path='src\Jesnote.csproj';" ^
   "$content=[IO.File]::ReadAllText($path,[Text.Encoding]::UTF8);" ^
-  "if ($content -notmatch '<Version>[^<]+</Version>') { throw 'Could not find <Version> in src\Jasnote.csproj' }" ^
+  "if ($content -notmatch '<Version>[^<]+</Version>') { throw 'Could not find <Version> in src\Jesnote.csproj' }" ^
   "$content=[regex]::Replace($content,'<Version>[^<]+</Version>','<Version>'+$version+'</Version>',1);" ^
   "[IO.File]::WriteAllText($path,$content,(New-Object Text.UTF8Encoding($false)))"
 if errorlevel 1 goto fail
 
 echo Building release configuration...
-dotnet build ".\src\Jasnote.csproj" -c Release
+dotnet build ".\src\Jesnote.csproj" -c Release
 if errorlevel 1 goto fail
 
 echo Committing release changes...
@@ -66,7 +66,7 @@ if errorlevel 1 goto fail
 
 echo Release %TAG% is ready locally.
 echo Push it with: git push origin %BRANCH% %TAG%
-echo GitHub Actions will build and publish the release asset after the tag is pushed.
+echo GitHub Actions will build and publish the release assets after the tag is pushed.
 popd >nul
 exit /b 0
 

@@ -1,7 +1,7 @@
-# Jasnote
+# Jesnote
 
 <p align="center">
-  <a href="https://github.com/Elykdez/Jasnote"><img src="src\Resources\Icons\logo.png" alt="Jasnote" width="96" /></a>
+  <a href="https://github.com/Elykdez/Jesnote"><img src="src\Resources\Icons\logo.png" alt="Jesnote" width="96" /></a>
 </p>
 <p align="center">
   <p align="center"><strong>A desktop app for opening and inspecting super large JSON | JSONL documents.</strong></p>
@@ -10,12 +10,11 @@
   English | <a href="./README_CN.md">中文</a>
 </p>
 <p align="center">
-  <a href="https://github.com/Elykdez/Jasnote/actions/workflows/ci-cd.yml"><img alt="CI/CD" src="https://github.com/Elykdez/Jasnote/actions/workflows/ci-cd.yml/badge.svg" /></a>
-  <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4" />
-  <img alt="WinForms" src="https://img.shields.io/badge/UI-WinForms-0078D4" />
+  <a href="https://github.com/Elykdez/Jesnote/actions/workflows/ci-cd.yml"><img alt="CI/CD" src="https://github.com/Elykdez/Jesnote/actions/workflows/ci-cd.yml/badge.svg" /></a>
+  <img alt="Avalonia" src="https://img.shields.io/badge/UI-Avalonia-0078D4" />
   <img alt="JSON" src="https://img.shields.io/badge/data-JSON-2F7D32" />
-  <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D6" />
-  <a href="https://github.com/Elykdez/Jasnote/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Elykdez/Jasnote?label=release" /></a>
+  <img alt="Windows and Apple Silicon macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20ARM64-0078D6" />
+  <a href="https://github.com/Elykdez/Jesnote/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Elykdez/Jesnote?label=release" /></a>
 </p>
 
 > Inspired by [Janice](https://github.com/ErikKalkoken/Janice).
@@ -34,61 +33,47 @@
 
 ## Requirements
 
-- Windows 10 with .NET Desktop Runtime 8 or newer.
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or newer for building from source.
+- Windows 10 or Apple Silicon macOS with .NET Runtime 8 or newer.
 
-## Run (Windows)
+## Performance
 
-Download the latest packaged build from the [releases page](https://github.com/Elykdez/jasnote/releases), extract it, then run `run.bat` from the extracted folder.
+[![Demo](demo.png)](./)
 
-To run from source:
+- Fully loaded and rendered a 12GB JSONL with 66M elements in approx. 100 sec. (on a HDD).
+- Actual speed can vary by device hardware, especially CPU, memory capacity, storage speed, and thermal conditions.
+- This result is a reference measurement, not a guaranteed speed on every machine.
 
-```powershell
-.\run.bat
-```
+## Search patterns
 
-You can also open a file directly:
+Choose the search type first, then enter a pattern:
 
-```powershell
-.\run.bat .\sample.json
-```
+- **Key**: searches JSON property names.
+- **String**: searches JSON string values.
+- **Number**: searches numeric values.
+- **Keyword**: searches only `true`, `false`, or `null`.
 
-Equivalent `dotnet` command:
+Pattern behavior:
 
-```powershell
-dotnet run --project .\src\Jasnote.csproj -- .\sample.json
-```
+- In **String** search, plain text is treated as **contains**.
+  - `user` matches `user`, `username`, and `current_user_id`.
+- `*` is the wildcard character.
+  - `user*` = starts with `user`
+  - `*user` = ends with `user`
+  - `*user*` = contains `user`
+- In **Key**, **Number**, and **Keyword** search, patterns keep the original wildcard behavior.
 
-## Build
+Search starts from the current selection and moves forward. If nothing is found before the end of the document, Jesnote asks whether to continue searching from the top.
 
-Restore dependencies:
+## Getting started
 
-```powershell
-dotnet restore .\src\Jasnote.csproj
-```
+Download the latest packaged build from the [releases page](https://github.com/Elykdez/Jesnote/releases), extract it, then run the executable for your platform.
 
-Build a release binary:
-
-```powershell
-dotnet build .\src\Jasnote.csproj -c Release
-```
-
-The build output is written to:
-
-```text
-src\bin\Release\net8.0-windows\
-```
-
-You can also build the solution file if your SDK supports `.slnx`:
-
-```powershell
-dotnet build .\Jasnote.slnx -c Release
-```
+If you want to build or run from source, see [CONTRIBUTION.md](./CONTRIBUTION.md).
 
 ## Plan
 
 - Improve UI
-- Add OSX support
+- Improve macOS packaging
 - Add more localizations
 - Add more Json related tools
 

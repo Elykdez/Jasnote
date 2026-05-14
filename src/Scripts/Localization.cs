@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Reflection;
 using System.Resources;
-using Jasnote.Core;
+using Jesnote.Core;
 
 [assembly: NeutralResourcesLanguage("en")]
 
-namespace Jasnote;
+namespace Jesnote;
 
 public enum LanguagePreference
 {
@@ -22,7 +22,7 @@ public interface ILocalizable
 public static class Localization
 {
     static readonly ResourceManager s_resources =
-        new("Jasnote.Resources.Strings", Assembly.GetExecutingAssembly());
+        new("Jesnote.Resources.Strings", Assembly.GetExecutingAssembly());
 
     public static LanguagePreference CurrentPreference { get; private set; } =
         LanguagePreference.Auto;

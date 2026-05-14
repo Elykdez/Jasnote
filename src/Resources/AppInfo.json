@@ -1,6 +1,18 @@
 {
-  "appName": "Jasnote",
-  "websiteUrl": "https://github.com/Elykdez/Jasnote",
-  "githubLatestReleaseApiUrl": "https://api.github.com/repos/Elykdez/Jasnote/releases/latest",
-  "githubUserAgent": "Jasnote-NET/0.1"
+  "appName": "Jesnote",
+  "websiteUrl": "https://github.com/Elykdez/Jesnote",
+  "githubLatestReleaseApiUrl": "https://api.github.com/repos/Elykdez/Jesnote/releases/latest",
+  "githubUserAgent": "Jesnote-NET/0.1",
+  "monospaceFont": "Consolas, Menlo, Monaco, SF Mono, DejaVu Sans Mono, Liberation Mono, monospace",
+  "settings": {
+    "colorTheme": "Auto",
+    "recentFileCount": 5,
+    "language": "Auto",
+    "extensionFilter": true,
+    "notifyUpdates": true,
+    "lastWindowWidth": 900,
+    "lastWindowHeight": 650,
+    "lastDetailShown": true,
+    "lastSelectionShown": false
+  }
 }

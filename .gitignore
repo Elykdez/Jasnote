@@ -7,6 +7,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/Dotnet.gitignore
 
+# macOS system files
+.DS_Store
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -55,6 +58,10 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# IDE
+.vs/
+.vscode/
 
 # AI Agents
 AGENTS.md
