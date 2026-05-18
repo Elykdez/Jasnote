@@ -71,6 +71,8 @@ public static class Localization
 
     public static string JsonNodeTypeName(JsonNodeType type) => T("JsonNodeType." + type);
 
+    public static string StringStorageName(StringStorageMode mode) => T("StringStorage." + mode);
+
     static CultureInfo ResolveCulture(LanguagePreference preference) =>
         preference switch
         {
@@ -90,13 +92,13 @@ public static class Localization
         var installed = CultureInfo.InstalledUICulture;
         return installed.TwoLetterISOLanguageName.ToLowerInvariant() switch
         {
-            "zh" => CultureInfo.GetCultureInfo("zh-CN"),
             "es" => CultureInfo.GetCultureInfo("es"),
-            "pt" => CultureInfo.GetCultureInfo("pt"),
             "fr" => CultureInfo.GetCultureInfo("fr"),
-            "ru" => CultureInfo.GetCultureInfo("ru"),
             "ja" => CultureInfo.GetCultureInfo("ja"),
             "ko" => CultureInfo.GetCultureInfo("ko"),
+            "ru" => CultureInfo.GetCultureInfo("ru"),
+            "pt" => CultureInfo.GetCultureInfo("pt"),
+            "zh" => CultureInfo.GetCultureInfo("zh-CN"),
             _ => CultureInfo.GetCultureInfo("en-US"),
         };
     }

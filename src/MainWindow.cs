@@ -51,6 +51,12 @@ public sealed class MainWindow : Window, ILocalizable
         LanguagePreference.Korean,
     ];
 
+    static readonly StringStorageMode[] s_storageModes =
+    [
+        StringStorageMode.Compact,
+        StringStorageMode.Classic,
+    ];
+
     #endregion
 
     #region Fields
@@ -133,6 +139,11 @@ public sealed class MainWindow : Window, ILocalizable
     bool _settingsReady;
     bool _updatingTreeScrollBar;
     bool _busy;
+
+    // Fires on the parser thread. We coalesce on a single pending UI post so
+    // a burst of grow events (one per ~33 ms in the parser) maps to at most
+    // one UI-thread refresh per dispatcher tick.
+    int _growPostPending;
 
     #endregion
 
@@ -380,13 +391,15 @@ public sealed class MainWindow : Window, ILocalizable
 
     void ApplyMenuHotKeys()
     {
-        _fileNew.HotKey = new KeyGesture(Key.N, KeyModifiers.Control);
-        _fileOpen.HotKey = new KeyGesture(Key.O, KeyModifiers.Control);
-        _fileReload.HotKey = new KeyGesture(Key.R, KeyModifiers.Alt);
-        _fileSettings.HotKey = new KeyGesture(Key.OemComma, KeyModifiers.Control);
-        _fileQuit.HotKey = new KeyGesture(Key.Q, KeyModifiers.Control);
-        _goTop.HotKey = new KeyGesture(Key.Home, KeyModifiers.Control);
-        _goBottom.HotKey = new KeyGesture(Key.End, KeyModifiers.Control);
+        // Avalonia renders InputGesture in the right column automatically; HotKey is the actual keystroke trigger.
+        // Always set both via SetShortcut so the visible label cannot drift from the binding that fires.
+        SetShortcut(_fileNew, new KeyGesture(Key.N, KeyModifiers.Control));
+        SetShortcut(_fileOpen, new KeyGesture(Key.O, KeyModifiers.Control));
+        SetShortcut(_fileReload, new KeyGesture(Key.R, KeyModifiers.Alt));
+        SetShortcut(_fileSettings, new KeyGesture(Key.OemComma, KeyModifiers.Control));
+        SetShortcut(_fileQuit, new KeyGesture(Key.Q, KeyModifiers.Control));
+        SetShortcut(_goTop, new KeyGesture(Key.Home, KeyModifiers.Control));
+        SetShortcut(_goBottom, new KeyGesture(Key.End, KeyModifiers.Control));
     }
 
     public void ApplyLocalization()
@@ -549,6 +562,9 @@ public sealed class MainWindow : Window, ILocalizable
         using var cts = new CancellationTokenSource();
         _loadCts = cts;
         SetBusy(true);
+        // Read the string-storage preference at load start; switching modes
+        // takes effect on the next load.
+        _doc.StringStorageMode = _settings.StringStorage;
         _doc.Reset();
         _tree.Document = null;
         _detail.Text = "";
@@ -632,8 +648,7 @@ public sealed class MainWindow : Window, ILocalizable
                 SetHasDocument(true);
                 SetTitle(label);
                 SetStatus(
-                    Localization.T("Loading.Canceled")
-                    + $" {_doc.Count:N0} elements available."
+                    Localization.T("Loading.Canceled") + $" {_doc.Count:N0} elements available."
                 );
             }
             else
@@ -662,11 +677,6 @@ public sealed class MainWindow : Window, ILocalizable
             SetBusy(false);
         }
     }
-
-    // Fires on the parser thread. We coalesce on a single pending UI post so
-    // a burst of grow events (one per ~33 ms in the parser) maps to at most
-    // one UI-thread refresh per dispatcher tick.
-    int _growPostPending;
 
     void OnDocumentGrewFromWorker()
     {
@@ -922,13 +932,15 @@ public sealed class MainWindow : Window, ILocalizable
 
     async Task ShowSettingsAsync()
     {
-        var theme = new ComboBox { Width = 180 };
-        var language = new ComboBox { Width = 180 };
+        var theme = new ComboBox { Width = 240 };
+        var language = new ComboBox { Width = 240 };
+        var storage = new ComboBox { Width = 240 };
         var recentFilesLabel = SettingsLabel("Settings.RecentFiles");
         var fileFilterLabel = SettingsLabel("Settings.FileFilter");
         var updatesLabel = SettingsLabel("Settings.Updates");
         var appearanceLabel = SettingsLabel("Settings.Appearance");
         var languageLabel = SettingsLabel("Settings.Language");
+        var storageLabel = SettingsLabel("Settings.StringStorage");
         var labels = new[]
         {
             recentFilesLabel,
@@ -936,6 +948,7 @@ public sealed class MainWindow : Window, ILocalizable
             updatesLabel,
             appearanceLabel,
             languageLabel,
+            storageLabel,
         };
         var recentCount = new NumericUpDown
         {
@@ -944,7 +957,7 @@ public sealed class MainWindow : Window, ILocalizable
             Increment = 1,
             FormatString = "0",
             Value = _settings.RecentFileCount,
-            Width = 100,
+            Width = 140,
         };
         var extensionFilter = new CheckBox { IsChecked = _settings.ExtensionFilter };
         var notifyUpdates = new CheckBox { IsChecked = _settings.NotifyUpdates };
@@ -956,7 +969,7 @@ public sealed class MainWindow : Window, ILocalizable
         };
 
         bool updatingDialogLocalization = false;
-        ApplySettingsChoices(theme, language);
+        ApplySettingsChoices(theme, language, storage);
 
         var dialog = new Window
         {
@@ -965,7 +978,7 @@ public sealed class MainWindow : Window, ILocalizable
             RequestedThemeVariant = CurrentRequestedThemeVariant(),
             ShowInTaskbar = false,
             Width = 460,
-            Height = 300,
+            Height = 340,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = new StackPanel
             {
@@ -977,6 +990,7 @@ public sealed class MainWindow : Window, ILocalizable
                     SettingsRow(fileFilterLabel, extensionFilter),
                     SettingsRow(updatesLabel, notifyUpdates),
                     SettingsRow(appearanceLabel, theme),
+                    SettingsRow(storageLabel, storage),
                     SettingsRow(languageLabel, language),
                     close,
                 },
@@ -1016,6 +1030,14 @@ public sealed class MainWindow : Window, ILocalizable
                 ApplyDialogLocalization();
             }
         };
+        storage.SelectionChanged += (s, e) =>
+        {
+            if (updatingDialogLocalization)
+                return;
+
+            if (storage.SelectedItem is Choice<StringStorageMode> choice)
+                _settings.StringStorage = choice.Value;
+        };
         close.Click += (s, e) => dialog.Close();
 
         WindowChrome.AttachTo(dialog, () => IsDarkChrome(dialog));
@@ -1035,7 +1057,7 @@ public sealed class MainWindow : Window, ILocalizable
                     if (label.Tag is string key)
                         label.Text = Localization.T(key);
                 }
-                ApplySettingsChoices(theme, language);
+                ApplySettingsChoices(theme, language, storage);
             }
             finally
             {
@@ -1044,26 +1066,7 @@ public sealed class MainWindow : Window, ILocalizable
         }
     }
 
-    static TextBlock SettingsLabel(string key)
-    {
-        return new TextBlock
-        {
-            Tag = key,
-            Text = Localization.T(key),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-    }
-
-    static Grid SettingsRow(TextBlock label, Control control)
-    {
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("160,*") };
-        row.Children.Add(label);
-        Grid.SetColumn(control, 1);
-        row.Children.Add(control);
-        return row;
-    }
-
-    void ApplySettingsChoices(ComboBox theme, ComboBox language)
+    void ApplySettingsChoices(ComboBox theme, ComboBox language, ComboBox storage)
     {
         theme.ItemsSource = s_themeOrder
             .Select(p => new Choice<ColorThemePreference>(p, Localization.ThemeName(p)))
@@ -1075,18 +1078,11 @@ public sealed class MainWindow : Window, ILocalizable
             .Select(p => new Choice<LanguagePreference>(p, Localization.LanguageName(p)))
             .ToArray();
         language.SelectedIndex = Array.IndexOf(languageOrder, _settings.Language);
-    }
 
-    static LanguagePreference[] CurrentLanguageOrder()
-    {
-        return
-        [
-            LanguagePreference.Auto,
-            .. s_languagePreferences.OrderBy(
-                Localization.LanguageName,
-                StringComparer.CurrentCulture
-            ),
-        ];
+        storage.ItemsSource = s_storageModes
+            .Select(m => new Choice<StringStorageMode>(m, Localization.StringStorageName(m)))
+            .ToArray();
+        storage.SelectedIndex = Array.IndexOf(s_storageModes, _settings.StringStorage);
     }
 
     async Task ShowAboutAsync()
@@ -1105,7 +1101,7 @@ public sealed class MainWindow : Window, ILocalizable
             Icon = CurrentWindowIcon(),
             RequestedThemeVariant = CurrentRequestedThemeVariant(),
             ShowInTaskbar = false,
-            Width = 440,
+            Width = 460,
             Height = 220,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = new StackPanel
@@ -1314,6 +1310,43 @@ public sealed class MainWindow : Window, ILocalizable
 
     #region Types & Helpers
 
+    static LanguagePreference[] CurrentLanguageOrder()
+    {
+        return
+        [
+            LanguagePreference.Auto,
+            .. s_languagePreferences.OrderBy(
+                Localization.LanguageName,
+                StringComparer.CurrentCulture
+            ),
+        ];
+    }
+
+    static TextBlock SettingsLabel(string key)
+    {
+        return new TextBlock
+        {
+            Tag = key,
+            Text = Localization.T(key),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+    }
+
+    static Grid SettingsRow(TextBlock label, Control control)
+    {
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("160,Auto") };
+        row.Children.Add(label);
+        Grid.SetColumn(control, 1);
+        row.Children.Add(control);
+        return row;
+    }
+
+    static void SetShortcut(MenuItem item, KeyGesture gesture)
+    {
+        item.HotKey = gesture;
+        item.InputGesture = gesture;
+    }
+
     static TextBlock CreateLinkText(
         string text,
         string url,
@@ -1357,8 +1390,10 @@ public sealed class MainWindow : Window, ILocalizable
     {
         const double GiB = 1024.0 * 1024.0 * 1024.0;
         const double MiB = 1024.0 * 1024.0;
-        if (bytes >= GiB) return $"{bytes / GiB:0.##} GiB";
-        if (bytes >= MiB) return $"{bytes / MiB:0.#} MiB";
+        if (bytes >= GiB)
+            return $"{bytes / GiB:0.##} GiB";
+        if (bytes >= MiB)
+            return $"{bytes / MiB:0.#} MiB";
         return $"{bytes / 1024.0:0.#} KiB";
     }
 

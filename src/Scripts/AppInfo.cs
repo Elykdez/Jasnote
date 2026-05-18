@@ -23,11 +23,11 @@ public static class AppInfo
     public static string GithubUserAgent => s_config.Value.GithubUserAgent;
     public static string MonospaceFont => s_config.Value.MonospaceFont;
 
-    public static AppSettings CreateDefaultSettings() => CloneSettings(s_config.Value.Settings);
-
     public static string Copyright =>
         Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright
         ?? "";
+
+    public static AppSettings CreateDefaultSettings() => CloneSettings(s_config.Value.Settings);
 
     static AppInfoConfig Load()
     {

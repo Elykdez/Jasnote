@@ -34,15 +34,17 @@ The csproj enables `ServerGarbageCollection`, `ConcurrentGarbageCollection`, `Ti
 Use `release.bat` from the repository root to prepare a local release commit and tag:
 
 ```powershell
-.\release.bat 0.1.4
+.\release.bat 0.1.0
 ```
 
-The script updates `<Version>` in `src\Jesnote.csproj`, builds the Release configuration, commits the current working-tree changes, and creates tag locally. It does not push anything automatically.
+The script updates the `<Version>` tag in [src/Jesnote.csproj](src/Jesnote.csproj), builds the Release configuration, commits the current working-tree changes, and creates tag locally. It does not push anything automatically.
 
-Review `git status` before running it because the script commits all current changes. When the local release looks correct, push the branch and tag manually:
+**Always bump `<Version>` in [src/Jesnote.csproj](src/Jesnote.csproj) for every release.** `release.bat` does this for you, but if you publish out-of-band (manual tag, hotfix, custom workflow), update that one line by hand before tagging - the assembly version, the About dialog, and the GitHub release name all read from it. A tag without a matching `<Version>` bump will ship a binary that still reports the previous number.
+
+Review `git status` before running `release.bat` because the script commits all current changes. When the local release looks correct, push the branch and tag manually:
 
 ```powershell
-git push origin main v0.1.4
+git push origin main v0.1.0
 ```
 
 GitHub Actions will build and publish Windows x64 and Apple Silicon macOS release assets after the tag is pushed. The workflow publishes framework-dependent packages (`--self-contained false`), so end users need the .NET 8 Runtime installed.
@@ -68,50 +70,80 @@ Parallel arrays indexed by node id, defined in [JsonTreeDocument.cs](src/Scripts
 ```text
 byte[]    Types[i]        node type
 string?[] Keys[i]         interned object key, or "[i]" for array elements
-long[]    Values[i]       discriminated slot: double bits / string-pool index / 0|1 / unused
+long[]    Values[i]       discriminated slot: double bits / encoded string ref / 0|1 / unused
 int[]     Parents[i]      parent id, or -1 for root
 int[]     FirstChild[i]   first child id, or -1
 int[]     NextSibling[i]  next sibling id, or -1
-string[]  StringPool      sized exactly to the number of String nodes
 ```
 
-Total: 29 bytes/node plus a string-pool entry only for string values. A hypothetical `class JsonNode` design (object header 24 bytes + fields + per-parent `List<int>` headers + boxed numbers) would be 80+ bytes/node and OOM well below the target.
+Total: 29 bytes/node, plus whatever the active `StringStorage` chooses to use for the actual String values. A hypothetical `class JsonNode` design (object header 24 bytes + fields + per-parent `List<int>` headers + boxed numbers) would be 80+ bytes/node and OOM well below the target.
 
 Object keys use a per-parse `Dictionary<string, string>` interner. Typical JSON has fewer than 200 distinct property names regardless of document size; this collapses millions of duplicate key strings to one each. The dictionary lives in the `BuildContext` local and is GC'd as soon as parse finishes.
 
 Children form a linked list (`FirstChild` + `NextSibling`) instead of a per-parent `List<int>`. Lists cost ~40 bytes of overhead each, and the document can have millions of parents. The linked-list cost is paid only in CPU when iterating children, which is rare on the hot path.
 
-The `long Values[]` slot is a discriminated union driven by `Types[i]`. Numbers are stored as `BitConverter.DoubleToInt64Bits`. Strings are an index into `StringPool`. Booleans are 0/1. The boxed `ValueOf(id)` accessor exists for compatibility but should not be used on hot paths.
+The `long Values[]` slot is a discriminated union driven by `Types[i]`. Numbers are stored as `BitConverter.DoubleToInt64Bits`. Booleans are 0/1. For String nodes, the slot holds an encoded ref returned by the active `StringStorage`; only that storage knows what the bits mean. The boxed `ValueOf(id)` accessor exists for compatibility but should not be used on hot paths.
 
 Array index keys (`[0]`, `[1]`, ...) are deduped via a static cache of 4096 entries so log-style documents do not allocate one short string per index.
 
 When you add a node type or change the value layout, verify the per-node bytes are still bounded and update the comment block at the top of [JsonTreeDocument.cs](src/Scripts/Core/JsonTreeDocument.cs).
 
+## String value storage
+
+String values are routed through a [StringStorage](src/Scripts/Core/StringStorage.cs) abstraction. The document holds one instance, picked by `StringStorageMode` at every `Reset()`/load start, and every String-related hot path (parse append, read, capped read, regex match, JSON-write) delegates to it. The `long` returned by `Append` is what `Values[id]` holds; the storage owns the interpretation of those bits.
+
+Two implementations ship today:
+
+`Utf8ChunkStringStorage` (default, "Compact"). Raw UTF-8 bytes append into 16 MiB `byte[]` chunks. The encoded ref packs `(chunk:16, offset:24, length:24)` into one `long`, so per-node memory is unchanged. The empty string is sentinel `0L`, allocates nothing. No CLR `string` is created at parse time - the build path calls `Utf8JsonReader.CopyString` straight into a chunk. Reads decode on demand with `Encoding.UTF8.GetString`. Search decodes into a pooled `char[]` before `Regex.IsMatch(ReadOnlySpan<char>)`. Extract writes raw UTF-8 spans through `Utf8JsonWriter.WriteString(name, ReadOnlySpan<byte>)`, skipping the UTF-16 round-trip. On a 13 GiB CJK/long-text JSONL this is roughly 40% lower managed-heap than `PooledStringStorage`. The trade-off is allocating a fresh `string` on every read and decoding per candidate during full-document string search.
+
+`PooledStringStorage` ("Classic"). One CLR `string` per value in a parallel array, grown by doubling. The encoded ref is just the int index. Higher memory but every read is a free reference return, and regex search runs directly against the existing string instances.
+
+If you add a new storage strategy: register it in `StringStorage.Create`, add the enum value to `StringStorageMode`, add a localized name to all `Strings*.resx` files, and wire it into the settings dialog.
+
+## Concurrent reads during streaming load
+
+The JSONL streaming path (`StreamJsonlAsync`) attaches the document to the tree *before* parsing starts and grows it live; the UI thread reads while the parser thread writes. To keep that safe without locking the hot path:
+
+`int _count` is the parser-private node counter, incremented every `Add*` call.
+
+`int _publishedCount` is what `Count` returns via `Volatile.Read`. The parser bumps it via `Publish()` (Volatile.Write + `DocumentGrew` event) every ~33 ms and once at the very end. Readers only access ids in `[0, Count)`.
+
+Children walks (`ChildCount`, `ChildIds`, and the corresponding loops in [VirtualJsonTree.cs](src/VirtualJsonTree.cs)) gate sibling traversal on `c < published`. The writer eagerly links new top-level lines into the synthetic root via `Frame.IsStreamingRoot` + `Frame.Tail` (it never accumulates them in a per-frame `List<int>`), but the reader still filters in case it walks into an id that hasn't been published yet.
+
+The grow-on-write node arrays (`Types`, `Keys`, `Values`, `Parents`, `FirstChild`, `NextSibling`) and the `StringStorage` backing arrays both follow a "publish reference, then write index" rule: when a chunk or capacity-doubled array is allocated, the new reference is published via `Volatile.Write` *before* any `Values[id]` that points into it becomes observable. Readers snapshot via `Volatile.Read` so they always see a self-consistent (array, count) pair.
+
+Don't add a new background-thread writer without following this pattern, and don't read the parser-private `_count` from the UI side - always go through `Count`.
+
 ## Parse pipeline
 
-Four parse paths share the same `HandleToken` core and the same compact-array output:
+Parse paths share the same `HandleToken` core and the same compact-array output. JSONL takes a different shape from regular JSON because each line is independent:
 
 ```text
-LoadAsync(path)              size <= 1 GiB    in-memory:  CountTokens + BuildFromSpan
-                             size >  1 GiB    streaming:  CountFromStreamAsync + BuildFromStreamAsync
-LoadAsync(byte[])            always in-memory
-LoadAsync(path, jsonl=true)  size <= 1 GiB    in-memory:  CountJsonl + BuildJsonl
-   .jsonl / .ndjson          size >  1 GiB    streaming:  CountJsonlFromStreamAsync + BuildJsonlFromStreamAsync
+LoadAsync(path), non-jsonl  size <= 1 GiB    in-memory two-pass:  CountTokens + BuildFromSpan
+                            size >  1 GiB    streaming two-pass:  CountFromStreamAsync + BuildFromStreamAsync
+LoadAsync(byte[]),non-jsonl always in-memory two-pass
+LoadAsync(path, jsonl)      any size         streaming single-pass: StreamJsonlAsync
 ```
 
-Every path runs two passes over the input. The count pass walks tokens and accumulates `TotalCount` and `StringCount` with no allocations beyond the reader state. The build pass calls `AllocateArrays(TotalCount, StringCount)` exactly once, then emits nodes into the pre-sized arrays.
+Non-JSONL paths still run two passes. The count pass walks tokens and accumulates `TotalCount` and `StringCount` with no allocations beyond the reader state. The build pass calls `AllocateArrays(TotalCount, StringCount)` exactly once, then emits nodes into the pre-sized arrays.
 
-Pre-sizing matters: `List` growth doubles capacity, which on a 100M-node array means a 400 MB to 800 MB resize copy at the worst moment. Two passes pay a 2x I/O cost (the OS page cache absorbs the second read for files smaller than RAM) but eliminate all reallocation during the build.
+Pre-sizing matters for the two-pass paths: `List` growth doubles capacity, which on a 100M-node array means a 400 MB to 800 MB resize copy at the worst moment. Two passes pay a 2x I/O cost (the OS page cache absorbs the second read for files smaller than RAM) but eliminate reallocation during the build.
 
-The streaming path uses `ArrayPool<byte>.Shared.Rent(InitialBufferSize)` (256 KiB initial) with chunked reads. If a single JSON token (typically a huge string literal) exceeds the buffer, the buffer doubles up to `MaxStreamChunkBuffer` (1 GiB). Beyond that, the parser throws an `InvalidDataException` with a clear message instead of OOM.
+JSONL skips the count pass entirely - it cannot afford the second IO pass on a 13 GiB file when the goal is to show first rows in under a second. Instead it streams once, appends nodes into grow-on-write arrays (`EnsureNodeCapacity` doubles capacity on demand), and publishes batches of completed lines to the UI via the `_publishedCount` mechanism documented in the "Concurrent reads during streaming load" section above. The amortized cost of `Array.Resize` doublings is fine; the one-time GC of the superseded arrays is reclaimed by the post-load `ReleaseParserGarbage()` LOH compaction in [MainWindow.cs](src/MainWindow.cs).
+
+The streaming paths use `ArrayPool<byte>.Shared.Rent(InitialBufferSize)` (256 KiB initial) with chunked reads. If a single JSON token (typically a huge string literal) exceeds the buffer, the buffer doubles up to `MaxStreamChunkBuffer` (1 GiB). Beyond that, the parser throws an `InvalidDataException` with a clear message instead of OOM.
 
 ## JSONL
 
 JSON Lines (`.jsonl`, `.ndjson`) puts one complete JSON document per line. .NET 8's `JsonReaderOptions` does not have `AllowMultipleValues` (that's a .NET 9 API), so the JSONL paths split on `\n` and parse each line independently with `Utf8JsonReader(line, isFinalBlock: true, default)`.
 
-Each top-level value becomes a child of a synthetic Array root pre-seeded via `PushSyntheticJsonlRoot`. The synthetic root is hidden by the tree control, so the user sees the records as top-level siblings keyed `[0]`, `[1]`, ...
+Each top-level value becomes a child of a synthetic Array root added during `StreamJsonlAsync` startup (`AddArray(string.Empty)` at id 0, with a `Frame.IsStreamingRoot = true` pushed onto a context that lives for the whole load). The synthetic root is hidden by the tree control, so the user sees the records as top-level siblings keyed `[0]`, `[1]`, ...
+
+Crucially, top-level values are linked into the root chain eagerly via a `Frame.Tail` pointer (`FirstChild[root] = id` on the first line, `NextSibling[oldTail] = id; tail = id` thereafter). This avoids accumulating a multi-million-entry `Children: List<int>` that would itself blow the per-load memory budget. UI readers still filter sibling walks by `Count` because the writer may have linked an id that isn't published yet.
 
 Detection is by file extension only ([MainWindow.IsJsonlPath](src/MainWindow.cs)). The picker filter is `*.json;*.jsonl;*.ndjson`. Trailing CR (CRLF) is stripped. Leading and trailing ASCII whitespace is stripped. Empty lines are skipped. A malformed line throws `JsonException` with the byte offset; the main window displays it in the status footer.
+
+Cancellation mid-stream is non-destructive: when the user cancels and the document already has top-level children, [MainWindow.LoadCoreAsync](src/MainWindow.cs) keeps whatever was published and surfaces "{N:N0} elements available" in the status. The synthetic-root-only case (cancelled before any line completed) is treated as a normal cancel and resets the doc.
 
 ## UI virtualization
 
@@ -173,6 +205,27 @@ Keep UI code in Avalonia terms:
 
 Avalonia layout can resize aggressively. Avoid depending on default button width for icon buttons; give fixed-format controls explicit `Width`, `MinWidth`, or layout constraints so localized text cannot stretch unrelated toolbar actions.
 
+### Sample
+
+```xml
+<Grid ColumnDefinitions="150,Auto,*,2*">
+    <!-- 
+      Column 0: Exactly 150 pixels wide
+      Column 1: Sizes automatically to fit its content
+      Column 2: Gets 1 part of the remaining space (33.3%)
+      Column 3: Gets 2 parts of the remaining space (66.6%)
+    -->
+
+    <!-- To place a control in a column, use the Grid.Column attached property -->
+    <Button Grid.Column="0" Content="Fixed Width" />
+    <TextBlock Grid.Column="1" Text="Fits perfectly" />
+    <TextBox Grid.Column="2" Text="Fills space" />
+    <TextBox Grid.Column="3" Text="Fills double space" />
+</Grid>
+```
+
+- This project uses code instead of XML for UI construction which is intentional to keep the codebase clean, but the layout technique works the same.
+
 ## Theming
 
 Avalonia handles light/dark styling through `RequestedThemeVariant` and the Fluent theme. The custom tree chooses its palette from the current Avalonia theme variant.
@@ -185,7 +238,7 @@ If you add a new custom-rendered control, verify it reacts correctly to light an
 
 UI strings live in `.resx` files under [src/Resources](src/Resources). `Strings.resx` is the neutral English resource, and culture-specific files such as `Strings.zh-CN.resx`, `Strings.fr.resx`, and `Strings.ja.resx` must keep the same key set unless there is an intentional fallback.
 
-Language names in the settings dropdown are not localized through `.resx`. [Localization.LanguageName](src/Scripts/Localization.cs) returns each language's native display name, such as `English`, `简体中文`, and `日本語`, so every locale sees the same stable names. Do not add `Language.*` keys to resource files.
+Language names in the settings dropdown are not localized through `.resx`. [Localization.LanguageName](src/Scripts/Localization.cs) returns each language's native display name, such as `English`, `简体中文`, so every locale sees the same stable names.
 
 When adding a locale:
 
@@ -200,6 +253,8 @@ Changing language while a dialog is open should update that dialog too. For sett
 ## Settings
 
 [AppSettings](src/Scripts/AppSettings.cs) is JSON-serialized to the current platform's application-data folder under `Jesnote/settings.json`. Load and save failures are swallowed; they are best-effort. To add a field, add the property with a sensible default; `PropertyNamingPolicy = CamelCase` is already set; update the settings dialog in [MainWindow.cs](src/MainWindow.cs) if it should be user-facing.
+
+`StringStorage` is a per-load setting: `MainWindow.LoadCoreAsync` reads it into `_doc.StringStorageMode` immediately before `_doc.Reset()`, so toggling the option in the dialog takes effect at the next file open. Display labels for the dropdown live in `StringStorage.<mode>` resource keys and should describe the trade-off inline (e.g. "Compact (low memory, slower search)") so users do not need a separate help blurb.
 
 ## Things deliberately not done
 
@@ -273,19 +328,18 @@ Per-element steady-state in Jesnote:
 
 `byte[] Types`: 1 byte.
 `string?[] Keys`: 8 bytes for the reference; key strings themselves are interned per parse.
-`long[] Values`: 8 bytes discriminated slot.
+`long[] Values`: 8 bytes discriminated slot. For String nodes, the slot holds the encoded ref returned by the active `StringStorage` (a chunk/offset/length tuple in Compact mode, an `int` pool index in Classic mode) - in both cases zero extra bytes per node beyond the existing `long`.
 `int[] Parents`, `int[] FirstChild`, `int[] NextSibling`: 12 bytes total.
-`string[] StringPool`: 8 bytes per string node only (sized to the count of string values, not the total node count).
 
-Total: 29 bytes per node plus a string-pool entry only for string-typed nodes. Compared with a compact-but-boxed indexed form, this removes boxed primitive values and per-parent child-list overhead on top of eliminating the transient object graph.
+Total: 29 bytes per node plus the actual string content, stored by the chosen `StringStorage` strategy. The String content cost is the file's UTF-8 bytes (Compact mode) or one CLR `string` per value (Classic mode); see the "String value storage" section above. Compared with a compact-but-boxed indexed form, this removes boxed primitive values and per-parent child-list overhead on top of eliminating the transient object graph.
 
 ### Streaming and very large files
 
 A full-tree loader does not stream. The full file must fit in RAM after expansion into managed objects, so failure mode is usually OOM.
 
-Jesnote draws a line at 1 GiB (`InMemoryLoadLimit` in [JsonTreeDocument.cs](src/Scripts/Core/JsonTreeDocument.cs)). At or below 1 GiB the file is `ReadAllBytesAsync`'d into a managed `byte[]` and parsed twice from that span; the OS page cache makes the second pass effectively free. Above 1 GiB the streaming path opens the file twice (`FileOptions.Asynchronous | FileOptions.SequentialScan`, 1 MiB buffer), reads in chunks, and feeds `Utf8JsonReader` with `isFinalBlock: false` plus persisted `JsonReaderState` across chunks. The buffer doubles up to 1 GiB if a single token (a huge string literal) does not fit; beyond that, the parser throws `InvalidDataException` instead of OOM.
+Jesnote draws a line at 1 GiB (`InMemoryLoadLimit` in [JsonTreeDocument.cs](src/Scripts/Core/JsonTreeDocument.cs)) for **non-JSONL** input. At or below 1 GiB the file is `ReadAllBytesAsync`'d into a managed `byte[]` and parsed twice from that span; the OS page cache makes the second pass effectively free. Above 1 GiB the streaming path opens the file twice (`FileOptions.Asynchronous | FileOptions.SequentialScan`, 1 MiB buffer), reads in chunks, and feeds `Utf8JsonReader` with `isFinalBlock: false` plus persisted `JsonReaderState` across chunks. The buffer doubles up to 1 GiB if a single token (a huge string literal) does not fit; beyond that, the parser throws `InvalidDataException` instead of OOM.
 
-For JSONL the streaming path is simpler: each line is a complete JSON value, so we split on `\n` at chunk boundaries and parse each completed line in isolation with `Utf8JsonReader(line, isFinalBlock: true, default)`. No reader state crosses lines, so a malformed line errors only on that line.
+JSONL always streams - the file is read once, lines are parsed in isolation with `Utf8JsonReader(line, isFinalBlock: true, default)`, and node arrays grow on demand. There is no count pass, no second IO pass, and no upfront "total elements" number (progress is reported as bytes-consumed / total). The UI thread attaches to the document immediately and the first rows appear as soon as the first chunk's lines are linked into the synthetic root and `Publish()`'d. A 13 GiB JSONL still finishes its full load in roughly the same wall-clock time as the old two-pass approach, but the user sees content within ~1 second.
 
 ### Sorting object keys
 
@@ -295,11 +349,11 @@ Jesnote does the same but defers the sort to `EndObject` and sorts the collected
 
 ### Progress and cancellation cadence
 
-Progress and cancellation use a fixed 10 000-node cadence in the parser. The reports are delivered to the Avalonia UI through `IProgress<ProgressInfo>`.
+Progress and cancellation use a fixed 10000-node cadence in the parser. The reports are delivered to the Avalonia UI through `IProgress<ProgressInfo>`.
 
-Jesnote uses the same 10 000 tick, but two implementation details matter:
+Jesnote uses the same 10000 tick, but two implementation details matter:
 
-UI dispatch is not free. If a future loading dialog mirrors every parser progress report onto the UI thread, 10 000 reports can still flood rendering. Throttle step-3 in-progress reports and always show step transitions plus the final `Progress >= 1.0`.
+UI dispatch is not free. If a future loading dialog mirrors every parser progress report onto the UI thread, 10000 reports can still flood rendering. Throttle step-3 in-progress reports and always show step transitions plus the final `Progress >= 1.0`.
 
 The cadence check itself must be a bucket-diff when `Count` updates in batches (as in the JSONL paths) rather than a modulo. See the Progress reporting section above for the full story; a uniform-line JSONL file with 17 tokens per line never lands `Count` on a multiple of 10 000 and the modulo never fires.
 
@@ -333,5 +387,7 @@ Parsing on multiple threads: `Utf8JsonReader` is inherently sequential because t
 4. `Count % N == 0` only fires when `Count` is a multiple. If `Count` jumps by varying amounts, use a bucket-diff.
 5. `Utf8JsonReader.GetString()` on a 100 MB string token works fine, but rendering that much text at once does not. Cap display, keep the raw value for copy/export.
 6. `byte[].Length` is capped at `int.MaxValue` (~2.1 GiB). On 64-bit .NET 8 this is the default array max even with `gcAllowVeryLargeObjects` (which is on by default). Files larger than 2 GiB cannot use the in-memory path.
+7. Server GC retains committed memory aggressively. After a large load, the working set stays near peak even when half the allocations are garbage. [MainWindow.ReleaseParserGarbage](src/MainWindow.cs) forces a full GC + LOH compaction at end of load, surfaces a localized "Optimizing memory..." status before it runs (the collection is stop-the-world and freezes the UI for 1-2 s on a multi-GB heap), and the final load-complete status reports `GC.GetTotalMemory(false)` so users see the real managed-heap number instead of a stale working-set figure.
+8. `Utf8JsonReader.CopyString(Span<byte>)` writes the unescaped UTF-8 form into a caller-supplied buffer with no `string` allocation. Compact storage uses this to skip per-value string materialization during parse. For escaped strings the returned byte count may be smaller than `ValueSpan.Length`; reclaim the slack by rewinding the chunk's write cursor before storing the encoded ref.
 
 That is the critical surface. Anything not covered here, infer from the code. Anything contradicted by the code, the code is the source of truth and this file is stale: please update it.

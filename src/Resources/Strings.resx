@@ -250,7 +250,16 @@
     <value>Settings</value>
   </data>
   <data name="Settings.Updates" xml:space="preserve">
-    <value>Updates:</value>
+    <value>Check Updates:</value>
+  </data>
+  <data name="Settings.StringStorage" xml:space="preserve">
+    <value>String storage:</value>
+  </data>
+  <data name="StringStorage.Compact" xml:space="preserve">
+    <value>Compact (low memory + slow search)</value>
+  </data>
+  <data name="StringStorage.Classic" xml:space="preserve">
+    <value>Classic (more memory + fast search)</value>
   </data>
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0} elements</value>

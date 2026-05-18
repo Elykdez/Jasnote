@@ -250,7 +250,16 @@
     <value>设置</value>
   </data>
   <data name="Settings.Updates" xml:space="preserve">
-    <value>更新：</value>
+    <value>检查更新：</value>
+  </data>
+  <data name="Settings.StringStorage" xml:space="preserve">
+    <value>字符串存储：</value>
+  </data>
+  <data name="StringStorage.Compact" xml:space="preserve">
+    <value>紧凑（内存低，搜索慢）</value>
+  </data>
+  <data name="StringStorage.Classic" xml:space="preserve">
+    <value>经典（内存高，搜索快）</value>
   </data>
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0} 个元素</value>

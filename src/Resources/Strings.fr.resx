@@ -255,6 +255,15 @@
   <data name="Settings.Updates" xml:space="preserve">
     <value>Mises à jour :</value>
   </data>
+  <data name="Settings.StringStorage" xml:space="preserve">
+    <value>Stockage des chaînes :</value>
+  </data>
+  <data name="StringStorage.Compact" xml:space="preserve">
+    <value>Compact (mémoire réduite, recherche plus lente)</value>
+  </data>
+  <data name="StringStorage.Classic" xml:space="preserve">
+    <value>Classique (plus de mémoire, recherche rapide)</value>
+  </data>
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0} éléments</value>
   </data>

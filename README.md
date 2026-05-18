@@ -40,10 +40,10 @@
 
 [![Demo](demo.png)](./)
 
-- Instant loading.
-- Fully loaded and rendered a 12GB JSONL with 66M elements in approx. 53 sec. (on a HDD).
-- Actual speed can vary by device hardware, especially CPU, memory capacity, storage speed, and thermal conditions.
-- This result is a reference measurement, not a guaranteed speed on every machine.
+- Instant opening and rendering.
+- Fully loaded and rendered a 13GB JSONL with 66M elements in approx. 53 sec. (on a HDD).
+- Such JSONL file in Classic mode consumes approximately 7GB of additional memory, whereas Compact Mode consumes only about 500MB.
+- This result is a reference measurement, actual speed can vary by device hardware, especially CPU, memory capacity, storage speed, and thermal conditions.
 
 ## Search patterns
 

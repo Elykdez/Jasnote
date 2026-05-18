@@ -400,7 +400,12 @@ public sealed class VirtualJsonTree : Control
     // published is the snapshot of _doc.Count taken by the caller. The chain
     // may extend past published while a streaming load is mid-publish; we
     // must stop at the boundary or risk reading half-initialised nodes.
-    void PushChildrenReversed(int parentId, int depth, Stack<(int Id, int Depth)> stack, int published)
+    void PushChildrenReversed(
+        int parentId,
+        int depth,
+        Stack<(int Id, int Depth)> stack,
+        int published
+    )
     {
         int child = _doc!.FirstChild[parentId];
         if (child == -1 || child >= published)

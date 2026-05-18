@@ -255,6 +255,15 @@
   <data name="Settings.Updates" xml:space="preserve">
     <value>Обновления:</value>
   </data>
+  <data name="Settings.StringStorage" xml:space="preserve">
+    <value>Хранилище строк:</value>
+  </data>
+  <data name="StringStorage.Compact" xml:space="preserve">
+    <value>Компактное (меньше памяти, поиск медленнее)</value>
+  </data>
+  <data name="StringStorage.Classic" xml:space="preserve">
+    <value>Классическое (больше памяти, быстрый поиск)</value>
+  </data>
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0} элементов</value>
   </data>

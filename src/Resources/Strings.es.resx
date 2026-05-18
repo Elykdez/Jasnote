@@ -255,6 +255,15 @@
   <data name="Settings.Updates" xml:space="preserve">
     <value>Actualizaciones:</value>
   </data>
+  <data name="Settings.StringStorage" xml:space="preserve">
+    <value>Almacenamiento de cadenas:</value>
+  </data>
+  <data name="StringStorage.Compact" xml:space="preserve">
+    <value>Compacto (poca memoria, búsqueda más lenta)</value>
+  </data>
+  <data name="StringStorage.Classic" xml:space="preserve">
+    <value>Clásico (más memoria, búsqueda rápida)</value>
+  </data>
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0} elementos</value>
   </data>

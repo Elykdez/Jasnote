@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Jesnote.Core;
 
 namespace Jesnote;
 
@@ -14,6 +15,7 @@ public sealed class AppSettings
 {
     public LanguagePreference Language { get; set; } = LanguagePreference.Auto;
     public ColorThemePreference ColorTheme { get; set; } = ColorThemePreference.Auto;
+    public StringStorageMode StringStorage { get; set; } = StringStorageMode.Compact;
     public bool ExtensionFilter { get; set; } = true;
     public bool NotifyUpdates { get; set; } = true;
     public int RecentFileCount { get; set; } = 5;

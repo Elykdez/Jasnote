@@ -255,6 +255,15 @@
   <data name="Settings.Updates" xml:space="preserve">
     <value>업데이트:</value>
   </data>
+  <data name="Settings.StringStorage" xml:space="preserve">
+    <value>문자열 저장 방식:</value>
+  </data>
+  <data name="StringStorage.Compact" xml:space="preserve">
+    <value>컴팩트 (메모리 적게, 검색 느림)</value>
+  </data>
+  <data name="StringStorage.Classic" xml:space="preserve">
+    <value>클래식 (메모리 많이, 검색 빠름)</value>
+  </data>
   <data name="Status.Elements" xml:space="preserve">
     <value>{0:N0}개 요소</value>
   </data>
