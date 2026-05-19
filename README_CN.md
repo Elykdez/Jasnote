@@ -4,7 +4,7 @@
   <a href="https://github.com/Elykdez/Jesnote"><img src="src\Resources\Icons\logo.png" alt="Jesnote" width="96" /></a>
 </p>
 <p align="center">
-  <p align="center"><strong>打开和查看超大型 JSON | JSONL 文档的桌面应用。</strong></p>
+  <p align="center"><strong>查看或编辑超大型 JSON | JSONL 文档的桌面应用。</strong></p>
 </p>
 <p align="center">
   <a href="./README.md">English</a> | 中文
@@ -17,18 +17,17 @@
   <a href="https://github.com/Elykdez/Jesnote/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Elykdez/Jesnote?label=release" /></a>
 </p>
 
-> 受到 [Janice](https://github.com/ErikKalkoken/Janice) 启发。
-
 - 使用自定义虚拟化树视图，因此浏览大型文件时不需要为每个 JSON 元素创建一个 UI 节点。
 
 ## 功能
 
 - 使用可展开的树结构浏览 JSON 数据。
 - 通过文件选择器、剪贴板、拖放或命令行参数打开文件。
-- 使用通配符模式搜索键和值。
-- 将选中的 JSON 分支导出到新文件，或复制到剪贴板。
 - 查看超大型 JSON 文件，例如超过 10GB、包含 1亿 个元素的文档。
 - 可随时取消加载，同时避免严重的内存压力或 UI 卡顿。
+- 使用通配符模式搜索键和值。
+- 支持编辑节点或合并数据，并具备撤销与重做功能。
+- 将选中的 JSON 分支导出到新文件，或复制到剪贴板。
 - 支持浅色和深色主题。
 - 支持语言：中文、英语、法语、日语、韩语、葡萄牙语、俄语、西班牙语。
 

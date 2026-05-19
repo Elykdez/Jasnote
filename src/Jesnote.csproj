@@ -15,7 +15,7 @@
     <AssemblyTitle>Jesnote</AssemblyTitle>
     <Company>Elykdez</Company>
     <Description>A desktop app for viewing large JSON files.</Description>
-    <Version>0.1.7</Version>
+    <Version>0.1.10</Version>
     <Copyright>(c) 2026 Elykdez</Copyright>
 
     <ServerGarbageCollection>true</ServerGarbageCollection>

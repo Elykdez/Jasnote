@@ -4,7 +4,7 @@
   <a href="https://github.com/Elykdez/Jesnote"><img src="src\Resources\Icons\logo.png" alt="Jesnote" width="96" /></a>
 </p>
 <p align="center">
-  <p align="center"><strong>A desktop app for opening and inspecting super large JSON | JSONL documents.</strong></p>
+  <p align="center"><strong>A desktop app for inspecting and editing super large JSON | JSONL documents.</strong></p>
 </p>
 <p align="center">
   English | <a href="./README_CN.md">中文</a>
@@ -17,18 +17,17 @@
   <a href="https://github.com/Elykdez/Jesnote/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Elykdez/Jesnote?label=release" /></a>
 </p>
 
-> Inspired by [Janice](https://github.com/ErikKalkoken/Janice).
-
 - Built with a virtualized tree view so large files are browsed without creating a UI node for every JSON element.
 
 ## Features
 
 - Browse JSON data as an expandable tree.
 - Open files from the file picker, clipboard, drag and drop, or a command line argument.
-- Search keys and values with wildcard patterns.
-- Export the selected JSON branch to a new file or copy it to the clipboard.
 - View very large JSON files, like >10GB documents with 100M+ elements.
 - Loading can be canceled at any time without heavy memory issues or UI freezes.
+- Search keys and values with wildcard patterns.
+- Edit nodes or union data with full undo and redo support.
+- Export the selected JSON branch to a new file or copy it to the clipboard.
 - Switch between light and dark themes.
 - Locale support: English, Chinese, French, Japanese, Korean, Portuguese, Russian, Spanish.
 
